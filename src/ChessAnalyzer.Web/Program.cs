@@ -1,7 +1,7 @@
 using ChessAnalyzer.Core.Analysis;
 using ChessAnalyzer.Core.ChessCom;
 using ChessAnalyzer.Core.Engine;
-using ChessAnalyzer.Web;
+using ChessAnalyzer.Shared;
 using ChessAnalyzer.Web.Services;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;

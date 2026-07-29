@@ -1,4 +1,4 @@
-@using ChessAnalyzer.Web.Components
+@using ChessAnalyzer.Shared.Components
 @using ChessAnalyzer.Core.Chess
 @using ChessAnalyzer.Core.Models
 @using Microsoft.JSInterop
@@ -154,7 +154,8 @@
 
         if (Interactive)
         {
-            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/chess-board.js");
+            _module ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/ChessAnalyzer.Shared/js/chess-board.js");
             _dotNetRef ??= DotNetObjectReference.Create(this);
             await _module.InvokeVoidAsync("init", _boardRef, _dotNetRef);
             _dragInitialized = true;

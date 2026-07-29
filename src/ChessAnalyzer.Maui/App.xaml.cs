@@ -4,9 +4,9 @@ namespace ChessAnalyzer.Maui;
 
 public partial class App : Application
 {
-    public App(Views.MainPage mainPage)
+    public App(MainPage mainPage)
     {
         InitializeComponent();
-        MainPage = new NavigationPage(mainPage);
+        MainPage = mainPage;
     }
 }

@@ -1,6 +1,6 @@
 using ChessAnalyzer.Core.Models;
 
-namespace ChessAnalyzer.Web.Components;
+namespace ChessAnalyzer.Shared.Components;
 
 public static class ClassificationIconSvg
 {

@@ -1,4 +1,4 @@
-namespace ChessAnalyzer.Web.Components;
+namespace ChessAnalyzer.Shared.Components;
 
 public static class ChessBoardHelper
 {

@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ChessAnalyzer.Core\ChessAnalyzer.Core.csproj" />
+    <ProjectReference Include="..\ChessAnalyzer.Shared\ChessAnalyzer.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
