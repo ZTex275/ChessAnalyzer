@@ -34,9 +34,7 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-android'">
-    <Content Include="engines\stockfish">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <MauiAsset Include="engines\stockfish" LogicalName="engines\stockfish" />
   </ItemGroup>
 
 </Project>

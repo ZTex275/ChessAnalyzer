@@ -23,6 +23,17 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
+      - name: Pin .NET 9 SDK
+        run: |
+          cat > global.json <<'EOF'
+          {
+            "sdk": {
+              "version": "9.0.316",
+              "rollForward": "latestFeature"
+            }
+          }
+          EOF
+
       - name: Install MAUI Android workload
         run: dotnet workload install maui-android
 
@@ -44,14 +55,15 @@ jobs:
           cp /tmp/stockfish/stockfish-android-armv8 src/ChessAnalyzer.Maui/engines/stockfish
           chmod +x src/ChessAnalyzer.Maui/engines/stockfish
 
-      - name: Build Release APK
+      - name: Restore and build Release APK
         run: |
+          dotnet restore src/ChessAnalyzer.Maui/ChessAnalyzer.Maui.csproj -f net9.0-android
           dotnet publish src/ChessAnalyzer.Maui/ChessAnalyzer.Maui.csproj \
             -f net9.0-android \
             -c Release \
-            -p:TargetFrameworks=net9.0-android \
             -p:AndroidPackageFormat=apk \
-            -p:AndroidSdkDirectory="$ANDROID_HOME"
+            -p:AndroidSdkDirectory="$ANDROID_HOME" \
+            --no-restore
 
       - name: Collect APK
         run: |
