@@ -71,7 +71,8 @@
                     <span class="move-classification @CurrentMoveAnalysis.Classification.ToCssClass()">
                         @if (CurrentMoveAnalysis.Classification.HasIcon())
                         {
-                            <span class="move-badge">@CurrentMoveAnalysis.Classification.ToIcon()</span>
+                            <MoveClassificationBadge Classification="CurrentMoveAnalysis.Classification"
+                                                     Variant="detail" />
                         }
                         @CurrentMoveAnalysis.Classification.ToDisplayName()
                     </span>
@@ -157,7 +158,8 @@
                             <span class="summary-chip @item.Classification.ToCssClass()" title="@item.Classification.ToDisplayName()">
                                 @if (item.Classification.HasIcon())
                                 {
-                                    <span class="move-badge">@item.Classification.ToIcon()</span>
+                                    <MoveClassificationBadge Classification="item.Classification"
+                                                             Variant="chip" />
                                 }
                                 @item.Count
                             </span>
@@ -179,7 +181,8 @@
                                         <span class="move-san">@whiteMove.San</span>
                                         @if (whiteMove.Classification is { } whiteClass && whiteClass.HasIcon())
                                         {
-                                            <span class="move-badge">@whiteClass.ToIcon()</span>
+                                            <MoveClassificationBadge Classification="whiteClass"
+                                                                     Variant="list" />
                                         }
                                     </button>
                                 }
@@ -190,7 +193,8 @@
                                         <span class="move-san">@blackMove.San</span>
                                         @if (blackMove.Classification is { } blackClass && blackClass.HasIcon())
                                         {
-                                            <span class="move-badge">@blackClass.ToIcon()</span>
+                                            <MoveClassificationBadge Classification="blackClass"
+                                                                     Variant="list" />
                                         }
                                     </button>
                                 }
@@ -293,22 +297,7 @@
             if (_board.CurrentPly == 0)
                 return EmptyBadges;
 
-            if (_result is not null && !IsInVariation && _board.CurrentPly <= _pgnMoveCount)
-                return BuildSingleMoveBadge(_board.CurrentPly - 1);
-
-            var badges = new Dictionary<string, MoveClassification>();
-            for (var i = 0; i < _board.CurrentPly; i++)
-            {
-                var analysis = GetAnalysisAt(i);
-                if (analysis is null || !analysis.Classification.HasIcon())
-                    continue;
-
-                var to = GetMoveDestinationSquare(i);
-                if (to is not null)
-                    badges[to] = analysis.Classification;
-            }
-
-            return badges;
+            return BuildSingleMoveBadge(_board.CurrentPly - 1);
         }
     }
 

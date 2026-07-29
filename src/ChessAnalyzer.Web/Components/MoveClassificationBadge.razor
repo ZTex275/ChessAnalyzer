@@ -1,0 +1,27 @@
+@using ChessAnalyzer.Core.Models
+
+@if (Classification is { } c && c.HasIcon())
+{
+    <span class="@BuildClass(c)" title="@c.ToDisplayName()">
+        @((MarkupString)ClassificationIconSvg.Render(c))
+    </span>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public MoveClassification Classification { get; set; }
+
+    [Parameter]
+    public string Variant { get; set; } = "list";
+
+    [Parameter]
+    public bool Highlight { get; set; }
+
+    private string BuildClass(MoveClassification c)
+    {
+        var classes = $"class-badge {c.ToCssClass()} class-badge-{Variant}";
+        if (Highlight)
+            classes += " class-badge-highlight";
+        return classes;
+    }
+}

@@ -51,15 +51,13 @@
                                  alt=""
                                  draggable="false" />
                         }
-                        @if (MoveBadges.TryGetValue(sq.Square, out var badgeClass) && badgeClass.HasIcon())
+                        @if (PlayedTo == sq.Square
+                             && MoveBadges.TryGetValue(sq.Square, out var badgeClass)
+                             && badgeClass.HasIcon())
                         {
-                            var badgeClasses = "piece-class-badge " + badgeClass.ToCssClass();
-                            if (HighlightBadgeSquare == sq.Square)
-                                badgeClasses += " piece-class-badge-current";
-                            <span class="@badgeClasses"
-                                  title="@badgeClass.ToDisplayName()">
-                                @badgeClass.ToIcon()
-                            </span>
+                            <MoveClassificationBadge Classification="badgeClass"
+                                                     Variant="board"
+                                                     Highlight="@(HighlightBadgeSquare == sq.Square)" />
                         }
                     </div>
                 }
