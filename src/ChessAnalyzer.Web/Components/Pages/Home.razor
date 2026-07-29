@@ -1,59 +1,36 @@
 @page "/"
 @using ChessAnalyzer.Core.Analysis
+@using ChessAnalyzer.Core.Chess
 @using ChessAnalyzer.Core.ChessCom
 @using ChessAnalyzer.Core.Models
 @inject ChessComClient ChessCom
 @inject GameAnalyzer Analyzer
 @inject IJSRuntime JS
+@implements IDisposable
 
 <div class="container">
     <h1>Chess Analyzer</h1>
     <p>Анализ партий Chess.com со Stockfish</p>
 
-    <div class="search-row">
-        <input @bind="_username" @bind:event="oninput" placeholder="Логин Chess.com" />
-        <button @onclick="LoadGamesAsync" disabled="@_loading">Загрузить</button>
-    </div>
+    <div class="board-section board-first">
+        <div class="board-column">
+            <ChessBoard Fen="@_board.CurrentFen"
+                        Flip="@BoardFlipped"
+                        Interactive="@CanInteract"
+                        SelectedSquare="@_selectedSquare"
+                        LegalTargets="@_legalTargets"
+                        PlayedUci="@CurrentPlayedUci"
+                        BestUci="@CurrentBestUci"
+                        ShowLegend="@(CurrentMoveAnalysis is not null)"
+                        OnSquareClick="HandleSquareClick" />
 
-    @if (!string.IsNullOrEmpty(_status))
-    {
-        <p class="status-text">@_status</p>
-    }
-
-    @if (_allGames.Count > 0)
-    {
-        <div class="games-list">
-            @foreach (var game in VisibleGames)
-            {
-                var outcome = GetOutcome(game);
-                <div class="game-card @(game == _selected ? "selected" : "")"
-                     @onclick="() => SelectGame(game)">
-                    <div class="game-card-body">
-                        <strong>@game.White vs @game.Black</strong>
-                        <div class="game-meta">@game.Result · @game.EndTime.ToString("dd.MM.yyyy")</div>
-                    </div>
-                    <div class="game-outcome @outcome.CssClass" title="@outcome.Title">@outcome.Icon</div>
-                </div>
-            }
-        </div>
-
-        @if (TotalPages > 1)
-        {
-            <div class="pagination">
-                <button @onclick="PrevPage" disabled="@(_pageIndex == 0 || _loading)">← Назад</button>
-                <span>@(_pageIndex + 1) / @TotalPages</span>
-                <button @onclick="NextPage" disabled="@(_pageIndex >= TotalPages - 1 || _loading)">Вперёд →</button>
+            <div class="board-nav">
+                <button @onclick="StepBack" disabled="@(!_board.CanStepBack || _analyzing)">← Назад</button>
+                <span class="ply-indicator">@GetPlyLabel()</span>
+                <button @onclick="StepForward" disabled="@(!_board.CanStepForward || _analyzing)">Вперёд →</button>
             </div>
-        }
-    }
 
-    @if (_selected is not null)
-    {
-        <div class="analysis-panel">
-            <h2>@_selected.White vs @_selected.Black</h2>
-            <button @onclick="AnalyzeAsync" disabled="@_analyzing">Анализировать</button>
-
-            @if (_analyzing)
+            @if (_analyzingMove || _analyzing)
             {
                 <div class="progress-wrap">
                     <div class="progress-bar" style="width: @(_progressPercent)%"></div>
@@ -65,95 +42,146 @@
                 <p class="status-text">@_progress</p>
             }
 
-            @if (_result is not null)
+            @if (CurrentMoveAnalysis is not null)
             {
-                <div class="accuracy-grid">
-                    <div class="accuracy-box">
-                        Белые
-                        <span>@_result.WhiteAccuracy%</span>
+                <div class="move-detail">
+                    <div class="move-header">
+                        Ход @CurrentMoveAnalysis.MoveNumber@(CurrentMoveAnalysis.IsWhiteMove ? "." : "...") @CurrentMoveAnalysis.San
                     </div>
-                    <div class="accuracy-box">
-                        Чёрные
-                        <span>@_result.BlackAccuracy%</span>
-                    </div>
+                    <strong class="@GetClassCss(CurrentMoveAnalysis.Classification)">
+                        @CurrentMoveAnalysis.Classification.ToDisplayName()
+                    </strong>
+                    <div class="best-move">Лучший: @CurrentMoveAnalysis.BestMoveSan</div>
+                    <div>Потеря: @CurrentMoveAnalysis.CentipawnLoss cp</div>
                 </div>
-
-                @if (_currentMove is not null)
-                {
-                    <div class="board-section">
-                        <ChessBoard Fen="@_currentMove.FenAfter"
-                                    Flip="@BoardFlipped"
-                                    PlayedUci="@_currentMove.Uci"
-                                    BestUci="@_currentMove.EvalBefore.BestMove" />
-
-                        <div class="move-detail">
-                            <div class="move-header">
-                                Ход @_currentMove.MoveNumber@( _currentMove.IsWhiteMove ? "." : "...") @_currentMove.San
-                            </div>
-                            <strong class="@GetClassCss(_currentMove.Classification)">
-                                @_currentMove.Classification.ToDisplayName()
-                            </strong>
-                            <div class="best-move">Лучший: @_currentMove.BestMoveSan</div>
-                            <div>Потеря: @_currentMove.CentipawnLoss cp</div>
-                            @if (!string.Equals(_currentMove.Uci, _currentMove.EvalBefore.BestMove, StringComparison.OrdinalIgnoreCase))
-                            {
-                                <div class="best-hint">Можно было: @_currentMove.BestMoveSan</div>
-                            }
-                        </div>
-                    </div>
-                }
-
-                <div class="move-list">
-                    @foreach (var row in GetMoveRows())
-                    {
-                        <div class="move-row">
-                            <span class="move-num">@row.Number.</span>
-                            @if (row.White is not null)
-                            {
-                                <button class="move-btn @ChipClass(row.White)"
-                                        style="border-bottom: 3px solid @row.White.Classification.ToColorHex()"
-                                        @onclick="() => SelectMove(row.White)">
-                                    @row.White.San
-                                </button>
-                            }
-                            @if (row.Black is not null)
-                            {
-                                <button class="move-btn @ChipClass(row.Black)"
-                                        style="border-bottom: 3px solid @row.Black.Classification.ToColorHex()"
-                                        @onclick="() => SelectMove(row.Black)">
-                                    @row.Black.San
-                                </button>
-                            }
-                        </div>
-                    }
-                </div>
-
-                <p class="analysis-time">Время: @_result.AnalysisDuration.ToString(@"mm\:ss")</p>
             }
         </div>
-    }
+    </div>
+
+    <div class="picker-section">
+        <div class="search-row">
+            <input @bind="_username" @bind:event="oninput" placeholder="Логин Chess.com" />
+            <button @onclick="LoadGamesAsync" disabled="@_loading">Загрузить</button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_status))
+        {
+            <p class="status-text">@_status</p>
+        }
+
+        @if (_allGames.Count > 0)
+        {
+            <div class="games-list">
+                @foreach (var game in VisibleGames)
+                {
+                    var outcome = GetOutcome(game);
+                    <div class="game-card @(game == _selected ? "selected" : "")"
+                         @onclick="() => SelectGame(game)">
+                        <div class="game-card-body">
+                            <strong>@game.White vs @game.Black</strong>
+                            <div class="game-meta">@game.Result · @game.EndTime.ToString("dd.MM.yyyy")</div>
+                        </div>
+                        <div class="game-outcome @outcome.CssClass" title="@outcome.Title">@outcome.Icon</div>
+                    </div>
+                }
+            </div>
+
+            @if (TotalPages > 1)
+            {
+                <div class="pagination">
+                    <button @onclick="PrevPage" disabled="@(_pageIndex == 0 || _loading)">← Назад</button>
+                    <span>@(_pageIndex + 1) / @TotalPages</span>
+                    <button @onclick="NextPage" disabled="@(_pageIndex >= TotalPages - 1 || _loading)">Вперёд →</button>
+                </div>
+            }
+        }
+
+        @if (_selected is not null)
+        {
+            <div class="analysis-panel">
+                <h2>@_selected.White vs @_selected.Black</h2>
+                <button @onclick="AnalyzeGameAsync" disabled="@(_analyzing || _analyzingMove)">Анализировать партию</button>
+
+                @if (_result is not null)
+                {
+                    <div class="accuracy-grid">
+                        <div class="accuracy-box">
+                            Белые
+                            <span>@_result.WhiteAccuracy%</span>
+                        </div>
+                        <div class="accuracy-box">
+                            Чёрные
+                            <span>@_result.BlackAccuracy%</span>
+                        </div>
+                    </div>
+
+                    <div class="move-list">
+                        @foreach (var row in GetMoveRows())
+                        {
+                            <div class="move-row">
+                                <span class="move-num">@row.Number.</span>
+                                @if (row.White is not null)
+                                {
+                                    <button class="move-btn @ChipClass(row.White.PlyIndex + 1)"
+                                            style="border-bottom: 3px solid @row.White.Classification.ToColorHex()"
+                                            @onclick="() => GoToMove(row.White!.PlyIndex + 1)">
+                                        @row.White.San
+                                    </button>
+                                }
+                                @if (row.Black is not null)
+                                {
+                                    <button class="move-btn @ChipClass(row.Black.PlyIndex + 1)"
+                                            style="border-bottom: 3px solid @row.Black.Classification.ToColorHex()"
+                                            @onclick="() => GoToMove(row.Black!.PlyIndex + 1)">
+                                        @row.Black.San
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <p class="analysis-time">Время: @_result.AnalysisDuration.ToString(@"mm\:ss")</p>
+                }
+            </div>
+        }
+    </div>
 </div>
 
 @code {
     private const int PageSize = 5;
     private const string UsernameKey = "chess_username";
 
+    private readonly BoardState _board = new();
+    private readonly List<MoveAnalysis?> _moveAnalyses = [];
+    private readonly AnalysisOptions _fastOptions = new() { Depth = 12, FastMode = true, Threads = 1, HashMb = 16 };
+
     private string _username = "";
     private string _status = "";
     private bool _loading;
     private bool _analyzing;
+    private bool _analyzingMove;
     private string _progress = "";
     private int _progressPercent;
     private List<ChessComGameSummary> _allGames = [];
     private ChessComGameSummary? _selected;
     private GameAnalysisResult? _result;
-    private MoveAnalysis? _currentMove;
     private int _pageIndex;
     private bool _usernameLoaded;
+    private string? _selectedSquare;
+    private IReadOnlyList<string> _legalTargets = [];
+    private CancellationTokenSource? _moveAnalysisCts;
+
+    private bool CanInteract => !_analyzing && _board.CurrentPly == _board.MoveCount;
 
     private bool BoardFlipped =>
         _selected is not null
         && string.Equals(_selected.Black, _username.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private MoveAnalysis? CurrentMoveAnalysis =>
+        _board.CurrentPly > 0 ? GetAnalysisAt(_board.CurrentPly - 1) : null;
+
+    private string? CurrentPlayedUci => CurrentMoveAnalysis?.Uci;
+    private string? CurrentBestUci => CurrentMoveAnalysis?.EvalBefore.BestMove;
 
     private int TotalPages => _allGames.Count == 0 ? 0 : (int)Math.Ceiling(_allGames.Count / (double)PageSize);
     private IEnumerable<ChessComGameSummary> VisibleGames =>
@@ -187,7 +215,7 @@
         _pageIndex = 0;
         _selected = null;
         _result = null;
-        _currentMove = null;
+        ResetBoard();
         _progress = "";
         _progressPercent = 0;
 
@@ -208,6 +236,13 @@
         {
             _loading = false;
         }
+    }
+
+    private void ResetBoard()
+    {
+        _board.Reset();
+        _moveAnalyses.Clear();
+        ClearSelection();
     }
 
     private void PrevPage()
@@ -238,15 +273,61 @@
     {
         _selected = game;
         _result = null;
-        _currentMove = null;
         _progress = "";
         _progressPercent = 0;
+
+        try
+        {
+            _board.LoadFromPgn(game.Pgn);
+            _moveAnalyses.Clear();
+            ClearSelection();
+            _status = $"Партия загружена · {_board.MoveCount} ходов";
+        }
+        catch (Exception ex)
+        {
+            _status = ex.Message;
+            ResetBoard();
+        }
     }
 
-    private void SelectMove(MoveAnalysis move) => _currentMove = move;
+    private void StepBack()
+    {
+        _moveAnalysisCts?.Cancel();
+        _analyzingMove = false;
+        _board.StepBack();
+        ClearSelection();
+    }
 
-    private string ChipClass(MoveAnalysis move) =>
-        move == _currentMove ? "active" : "";
+    private void StepForward()
+    {
+        _board.StepForward();
+        ClearSelection();
+    }
+
+    private void GoToMove(int ply)
+    {
+        _board.GoToPly(ply);
+        ClearSelection();
+    }
+
+    private string GetPlyLabel()
+    {
+        if (_board.MoveCount == 0)
+            return "Начальная позиция";
+
+        return $"Ход {_board.CurrentPly} / {_board.MoveCount}";
+    }
+
+    private MoveAnalysis? GetAnalysisAt(int moveIndex)
+    {
+        if (moveIndex < 0 || moveIndex >= _moveAnalyses.Count)
+            return null;
+
+        return _moveAnalyses[moveIndex];
+    }
+
+    private string ChipClass(int ply) =>
+        _board.CurrentPly == ply ? "active" : "";
 
     private IEnumerable<(int Number, MoveAnalysis? White, MoveAnalysis? Black)> GetMoveRows()
     {
@@ -262,7 +343,112 @@
         }
     }
 
-    private async Task AnalyzeAsync()
+    private async Task HandleSquareClick(string square)
+    {
+        if (!CanInteract)
+            return;
+
+        if (_selectedSquare is null)
+        {
+            if (_board.IsOwnPiece(square))
+            {
+                _selectedSquare = square;
+                _legalTargets = _board.GetLegalTargetSquares(square);
+            }
+
+            return;
+        }
+
+        if (square == _selectedSquare)
+        {
+            ClearSelection();
+            return;
+        }
+
+        if (_legalTargets.Contains(square))
+        {
+            var from = _selectedSquare;
+            ClearSelection();
+
+            if (_board.TryMakeMove(from, square))
+                await AnalyzeLastMoveAsync();
+        }
+        else if (_board.IsOwnPiece(square))
+        {
+            _selectedSquare = square;
+            _legalTargets = _board.GetLegalTargetSquares(square);
+        }
+        else
+        {
+            ClearSelection();
+        }
+    }
+
+    private void ClearSelection()
+    {
+        _selectedSquare = null;
+        _legalTargets = [];
+    }
+
+    private async Task AnalyzeLastMoveAsync()
+    {
+        if (_board.CurrentPly == 0)
+            return;
+
+        _moveAnalysisCts?.Cancel();
+        _moveAnalysisCts = new CancellationTokenSource();
+        var ct = _moveAnalysisCts.Token;
+
+        var moveIndex = _board.CurrentPly - 1;
+        var move = _board.GetMoveAt(moveIndex);
+        if (move is null)
+            return;
+
+        while (_moveAnalyses.Count <= moveIndex)
+            _moveAnalyses.Add(null);
+
+        _analyzingMove = true;
+        _progress = $"Анализ хода: {move.Value.San}";
+        _progressPercent = 0;
+
+        try
+        {
+            var analysis = await Analyzer.AnalyzeSingleMoveAsync(
+                move.Value.San,
+                move.Value.Uci,
+                _board.GetFenAt(moveIndex),
+                _board.GetFenAt(moveIndex + 1),
+                move.Value.IsWhite,
+                moveIndex,
+                _fastOptions,
+                ct: ct);
+
+            if (!ct.IsCancellationRequested)
+            {
+                _moveAnalyses[moveIndex] = analysis;
+                _progress = "Готово";
+                _progressPercent = 100;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // новый ход отменил предыдущий анализ
+        }
+        catch (Exception ex)
+        {
+            _progress = ex.Message;
+            _progressPercent = 0;
+        }
+        finally
+        {
+            if (!ct.IsCancellationRequested)
+            {
+                _analyzingMove = false;
+            }
+        }
+    }
+
+    private async Task AnalyzeGameAsync()
     {
         if (_selected is null)
             return;
@@ -270,9 +456,10 @@
         _analyzing = true;
         _progress = "Запуск Stockfish...";
         _progressPercent = 0;
+        ClearSelection();
+
         try
         {
-            var options = new AnalysisOptions { Depth = 12, FastMode = true, Threads = 1, HashMb = 16 };
             var progress = new Progress<(int current, int total, string san)>(p =>
             {
                 _progressPercent = p.total == 0 ? 0 : (int)Math.Round(p.current * 100.0 / p.total);
@@ -280,9 +467,14 @@
                 _ = InvokeAsync(StateHasChanged);
             });
 
-            _result = await Analyzer.AnalyzeAsync(_selected, options, progress);
-            _currentMove = _result.Moves.FirstOrDefault();
-            _progress = "Анализ завершён";
+            _result = await Analyzer.AnalyzeAsync(_selected, _fastOptions, progress);
+
+            _board.LoadFromPgn(_selected.Pgn);
+            _moveAnalyses.Clear();
+            _moveAnalyses.AddRange(_result.Moves.Cast<MoveAnalysis?>());
+            _board.GoToPly(0);
+
+            _progress = "Анализ завершён — листайте ходы на доске";
             _progressPercent = 100;
         }
         catch (Exception ex)
@@ -323,6 +515,12 @@
         MoveClassification.Inaccuracy => "classification-inaccuracy",
         _ => "classification-best"
     };
+
+    public void Dispose()
+    {
+        _moveAnalysisCts?.Cancel();
+        _moveAnalysisCts?.Dispose();
+    }
 
     private readonly record struct GameOutcome(string Icon, string CssClass, string Title)
     {

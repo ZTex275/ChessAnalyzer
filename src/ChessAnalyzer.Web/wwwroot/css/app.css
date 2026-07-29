@@ -190,6 +190,69 @@ button:disabled {
     margin: 16px 0;
 }
 
+.board-first {
+    margin-top: 0;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #444;
+}
+
+.board-column {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.board-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.board-nav button {
+    min-width: 110px;
+}
+
+.ply-indicator {
+    color: #aaa;
+    font-size: 14px;
+    min-width: 140px;
+    text-align: center;
+}
+
+.picker-section {
+    margin-top: 20px;
+}
+
+.square.selected {
+    box-shadow: inset 0 0 0 3px #4a90d9;
+}
+
+.square.legal::before {
+    content: "";
+    position: absolute;
+    inset: 12px;
+    background: rgba(74, 144, 217, 0.45);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.square.legal.best::before {
+    background: rgba(240, 193, 93, 0.55);
+}
+
+.chess-board .square {
+    cursor: default;
+}
+
+.chess-board .square:has(.piece) {
+    cursor: pointer;
+}
+
+.square.legal {
+    cursor: pointer;
+}
+
 .board-wrap {
     flex: 0 0 auto;
 }

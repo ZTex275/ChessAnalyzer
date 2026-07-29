@@ -25,10 +25,10 @@ public sealed class GameAnalyzer(IStockfishEngine engine)
             ct.ThrowIfCancellationRequested();
             var (san, uci, fenBefore, fenAfter, isWhite) = parsedMoves[i];
 
-            progress?.Report((i + 1, parsedMoves.Count, san));
-
             var evalBefore = await GetEvalAsync(fenBefore, cache, ct);
             var evalAfter = await GetEvalAsync(fenAfter, cache, ct);
+
+            progress?.Report((i + 1, parsedMoves.Count, san));
 
             var cpBefore = NormalizeCp(evalBefore, isWhite);
             var cpAfter = NormalizeCp(evalAfter, isWhite);
@@ -63,6 +63,46 @@ public sealed class GameAnalyzer(IStockfishEngine engine)
             AnalysisDuration = sw.Elapsed,
             WhiteAccuracy = MoveClassifier.ComputeAccuracy(results, true),
             BlackAccuracy = MoveClassifier.ComputeAccuracy(results, false)
+        };
+    }
+
+    public async Task<MoveAnalysis> AnalyzeSingleMoveAsync(
+        string san,
+        string uci,
+        string fenBefore,
+        string fenAfter,
+        bool isWhite,
+        int plyIndex,
+        AnalysisOptions options,
+        EvalCache? cache = null,
+        CancellationToken ct = default)
+    {
+        await engine.InitializeAsync(options, ct);
+        cache ??= new EvalCache();
+
+        var evalBefore = await GetEvalAsync(fenBefore, cache, ct);
+        var evalAfter = await GetEvalAsync(fenAfter, cache, ct);
+
+        var cpBefore = NormalizeCp(evalBefore, isWhite);
+        var cpAfter = NormalizeCp(evalAfter, isWhite);
+        var cpLoss = MoveClassifier.ComputeCentipawnLoss(cpBefore, cpAfter, isWhite);
+        var playedBest = string.Equals(uci, evalBefore.BestMove, StringComparison.OrdinalIgnoreCase);
+        var bestSan = TryUciToSan(fenBefore, evalBefore.BestMove) ?? evalBefore.BestMove;
+
+        return new MoveAnalysis
+        {
+            PlyIndex = plyIndex,
+            MoveNumber = (plyIndex / 2) + 1,
+            San = san,
+            Uci = uci,
+            FenBefore = fenBefore,
+            FenAfter = fenAfter,
+            EvalBefore = evalBefore,
+            EvalAfter = evalAfter,
+            CentipawnLoss = cpLoss,
+            Classification = MoveClassifier.Classify(cpLoss, playedBest, plyIndex < 8),
+            BestMoveSan = bestSan,
+            IsWhiteMove = isWhite
         };
     }
 

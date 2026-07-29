@@ -1,4 +1,5 @@
 @using ChessAnalyzer.Web.Components
+@using ChessAnalyzer.Core.Chess
 
 <div class="board-wrap">
     <div class="chess-board @(Flip ? "flipped" : "")">
@@ -9,13 +10,19 @@
             var isLight = (fileIndex + rank) % 2 == 0;
             var classes = "square " + (isLight ? "light" : "dark");
 
+            if (Interactive && SelectedSquare == sq.Square)
+                classes += " selected";
+
+            if (Interactive && LegalTargets.Contains(sq.Square))
+                classes += " legal";
+
             if (PlayedFrom == sq.Square || PlayedTo == sq.Square)
                 classes += " played";
 
             if (BestFrom == sq.Square || BestTo == sq.Square)
                 classes += " best";
 
-            <div class="@classes">
+            <div class="@classes" @onclick="() => HandleSquareClick(sq.Square)">
                 @if (sq.Piece != '.')
                 {
                     <span class="piece">@ChessBoardHelper.PieceSymbol(sq.Piece)</span>
@@ -23,17 +30,25 @@
             </div>
         }
     </div>
-    <div class="board-legend">
-        <span class="legend-item"><span class="dot played"></span> сыгранный</span>
-        <span class="legend-item"><span class="dot best"></span> лучший</span>
-    </div>
+    @if (ShowLegend)
+    {
+        <div class="board-legend">
+            <span class="legend-item"><span class="dot played"></span> сыгранный</span>
+            <span class="legend-item"><span class="dot best"></span> лучший</span>
+        </div>
+    }
 </div>
 
 @code {
-    [Parameter] public string Fen { get; set; } = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    [Parameter] public string Fen { get; set; } = BoardState.StartFen;
     [Parameter] public bool Flip { get; set; }
     [Parameter] public string? PlayedUci { get; set; }
     [Parameter] public string? BestUci { get; set; }
+    [Parameter] public bool Interactive { get; set; }
+    [Parameter] public string? SelectedSquare { get; set; }
+    [Parameter] public IReadOnlyList<string> LegalTargets { get; set; } = [];
+    [Parameter] public bool ShowLegend { get; set; } = true;
+    [Parameter] public EventCallback<string> OnSquareClick { get; set; }
 
     private string? PlayedFrom { get; set; }
     private string? PlayedTo { get; set; }
@@ -52,5 +67,13 @@
         BestTo = best?.To;
 
         Squares = ChessBoardHelper.ParseFen(Fen, Flip);
+    }
+
+    private async Task HandleSquareClick(string square)
+    {
+        if (!Interactive || !OnSquareClick.HasDelegate)
+            return;
+
+        await OnSquareClick.InvokeAsync(square);
     }
 }
