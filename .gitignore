@@ -9,3 +9,5 @@ obj/
 Thumbs.db
 src/ChessAnalyzer.Maui/engines/stockfish*
 src/ChessAnalyzer.Maui/engines/*.exe
+src/ChessAnalyzer.Web/wwwroot/js/stockfish.js
+src/ChessAnalyzer.Web/wwwroot/js/stockfish.wasm.js

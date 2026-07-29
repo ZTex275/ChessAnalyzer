@@ -12,7 +12,7 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 builder.Services.AddScoped<ChessComClient>();
-builder.Services.AddScoped<IStockfishEngine, WebAnalysisEngine>();
+builder.Services.AddScoped<IStockfishEngine, StockfishWasmEngine>();
 builder.Services.AddScoped<GameAnalyzer>();
 
 await builder.Build().RunAsync();
