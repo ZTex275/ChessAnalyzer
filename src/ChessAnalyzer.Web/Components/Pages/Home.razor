@@ -382,7 +382,7 @@
             _pgnMoveCount = _pgnUciMoves.Count;
             _moveAnalyses.Clear();
             ClearSelection();
-            _board.GoToPly(_board.MainMoveCount);
+            _board.GoToPly(0);
             _status = $"Партия загружена · {_board.MainMoveCount} ходов";
             _ = RefreshPositionBestAsync();
         }
@@ -621,7 +621,7 @@
             _pgnMoveCount = _pgnUciMoves.Count;
             _moveAnalyses.Clear();
             _moveAnalyses.AddRange(_result.Moves.Cast<MoveAnalysis?>());
-            _board.GoToPly(_board.MainMoveCount);
+            _board.GoToPly(0);
 
             _progress = "Анализ завершён — листайте ходы на доске";
             _progressPercent = 100;
