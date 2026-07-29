@@ -23,6 +23,8 @@
                         BestUci="@CurrentBestUci"
                         LastMoveClassification="@CurrentMoveClassification"
                         ShowLegend="@(CurrentMoveAnalysis is not null || !string.IsNullOrEmpty(CurrentBestUci))"
+                        QueryDragStart="QueryDragStart"
+                        OnPieceDrop="HandlePieceDrop"
                         OnSquareClick="HandleSquareClick" />
 
             <div class="board-nav">
@@ -151,38 +153,44 @@
                             </span>
                         }
                     </div>
+                }
 
+                @if (_pgnMoveCount > 0)
+                {
                     <div class="move-list">
                         @foreach (var row in GetMoveRows())
                         {
                             <div class="move-row">
                                 <span class="move-num">@row.Number.</span>
-                                @if (row.White is not null)
+                                @if (row.White is { } whiteMove)
                                 {
-                                    <button class="move-btn @ChipClass(row.White.PlyIndex + 1) @row.White.Classification.ToCssClass()"
-                                            @onclick="() => GoToMove(row.White!.PlyIndex + 1)">
-                                        <span class="move-san">@row.White.San</span>
-                                        @if (row.White.Classification.HasIcon())
+                                    <button class="move-btn @ChipClass(whiteMove.PlyIndex + 1) @whiteMove.ClassificationCss"
+                                            @onclick="() => GoToMove(whiteMove.PlyIndex + 1)">
+                                        <span class="move-san">@whiteMove.San</span>
+                                        @if (whiteMove.Classification is { } whiteClass && whiteClass.HasIcon())
                                         {
-                                            <span class="move-badge">@row.White.Classification.ToIcon()</span>
+                                            <span class="move-badge">@whiteClass.ToIcon()</span>
                                         }
                                     </button>
                                 }
-                                @if (row.Black is not null)
+                                @if (row.Black is { } blackMove)
                                 {
-                                    <button class="move-btn @ChipClass(row.Black.PlyIndex + 1) @row.Black.Classification.ToCssClass()"
-                                            @onclick="() => GoToMove(row.Black!.PlyIndex + 1)">
-                                        <span class="move-san">@row.Black.San</span>
-                                        @if (row.Black.Classification.HasIcon())
+                                    <button class="move-btn @ChipClass(blackMove.PlyIndex + 1) @blackMove.ClassificationCss"
+                                            @onclick="() => GoToMove(blackMove.PlyIndex + 1)">
+                                        <span class="move-san">@blackMove.San</span>
+                                        @if (blackMove.Classification is { } blackClass && blackClass.HasIcon())
                                         {
-                                            <span class="move-badge">@row.Black.Classification.ToIcon()</span>
+                                            <span class="move-badge">@blackClass.ToIcon()</span>
                                         }
                                     </button>
                                 }
                             </div>
                         }
                     </div>
+                }
 
+                @if (_result is not null)
+                {
                     <p class="analysis-time">Время: @_result.AnalysisDuration.ToString(@"mm\:ss")</p>
                 }
             </div>
@@ -214,6 +222,7 @@
     private IReadOnlyList<string> _legalTargets = [];
     private int _pgnMoveCount;
     private List<string> _pgnUciMoves = [];
+    private List<(string San, string Uci, bool IsWhite)> _pgnMoves = [];
 
     private CancellationTokenSource? _moveAnalysisCts;
     private CancellationTokenSource? _gameAnalysisCts;
@@ -337,6 +346,7 @@
         _moveAnalyses.Clear();
         _pgnMoveCount = 0;
         _pgnUciMoves = [];
+        _pgnMoves = [];
         _positionBestUci = null;
         _positionBestSan = null;
         _lastPositionFen = "";
@@ -378,7 +388,8 @@
         try
         {
             _board.LoadFromPgn(game.Pgn);
-            _pgnUciMoves = _board.Moves.Take(_board.MainMoveCount).Select(m => m.Uci).ToList();
+            _pgnMoves = _board.Moves.Take(_board.MainMoveCount).ToList();
+            _pgnUciMoves = _pgnMoves.Select(m => m.Uci).ToList();
             _pgnMoveCount = _pgnUciMoves.Count;
             _moveAnalyses.Clear();
             ClearSelection();
@@ -400,6 +411,7 @@
         _board.StepBack();
         ClearSelection();
         _ = RefreshPositionBestAsync();
+        _ = EnsureVisibleMoveAnalyzedAsync();
     }
 
     private void StepForward()
@@ -407,6 +419,7 @@
         _board.StepForward();
         ClearSelection();
         _ = RefreshPositionBestAsync();
+        _ = EnsureVisibleMoveAnalyzedAsync();
     }
 
     private void GoToMove(int ply)
@@ -414,6 +427,7 @@
         _board.GoToPly(ply);
         ClearSelection();
         _ = RefreshPositionBestAsync();
+        _ = EnsureVisibleMoveAnalyzedAsync();
     }
 
     private void ReturnToMainLine()
@@ -455,24 +469,90 @@
     private string ChipClass(int ply) =>
         _board.CurrentPly == ply ? "active" : "";
 
-    private IEnumerable<(int Number, MoveAnalysis? White, MoveAnalysis? Black)> GetMoveRows()
+    private IEnumerable<(int Number, MoveRowEntry? White, MoveRowEntry? Black)> GetMoveRows()
     {
-        if (_result is null)
+        var moveCount = _result?.Moves.Count ?? _pgnMoveCount;
+        if (moveCount == 0)
             yield break;
 
-        var maxMove = _result.Moves.Max(m => m.MoveNumber);
+        var maxMove = _result is not null
+            ? _result.Moves.Max(m => m.MoveNumber)
+            : (moveCount + 1) / 2;
+
         for (var n = 1; n <= maxMove; n++)
         {
-            var white = _result.Moves.FirstOrDefault(m => m.MoveNumber == n && m.IsWhiteMove);
-            var black = _result.Moves.FirstOrDefault(m => m.MoveNumber == n && !m.IsWhiteMove);
+            var whiteIdx = (n - 1) * 2;
+            var blackIdx = whiteIdx + 1;
+            MoveRowEntry? white = whiteIdx < moveCount ? BuildMoveRowEntry(whiteIdx) : null;
+            MoveRowEntry? black = blackIdx < moveCount ? BuildMoveRowEntry(blackIdx) : null;
             yield return (n, white, black);
         }
     }
 
-    private async Task HandleSquareClick(string square)
+    private MoveRowEntry? BuildMoveRowEntry(int plyIndex)
+    {
+        var analysis = GetAnalysisAt(plyIndex);
+        if (analysis is not null)
+        {
+            return new MoveRowEntry(
+                analysis.San,
+                plyIndex,
+                analysis.Classification,
+                analysis.Classification.ToCssClass());
+        }
+
+        var move = GetMainLineMoveAt(plyIndex);
+        if (move is null)
+            return null;
+
+        return new MoveRowEntry(move.Value.San, plyIndex, null, "");
+    }
+
+    private (string San, string Uci, bool IsWhite)? GetMainLineMoveAt(int moveIndex)
+    {
+        if (moveIndex < 0 || moveIndex >= _pgnMoves.Count)
+            return null;
+
+        return _pgnMoves[moveIndex];
+    }
+
+    private Task HandlePieceDrop((string From, string To) move)
     {
         if (!CanInteract)
-            return;
+            return Task.CompletedTask;
+
+        ClearSelection();
+
+        if (_board.TryMakeMove(move.From, move.To))
+        {
+            if (_board.IsOnMainLine)
+                _ = EnsureVisibleMoveAnalyzedAsync();
+            else
+                _ = RefreshPositionBestAsync();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task<ChessBoard.DragStartInfo?> QueryDragStart(string square)
+    {
+        if (!CanInteract || !_board.IsOwnPiece(square))
+            return Task.FromResult<ChessBoard.DragStartInfo?>(null);
+
+        _selectedSquare = square;
+        _legalTargets = _board.GetLegalTargetSquares(square);
+
+        return Task.FromResult<ChessBoard.DragStartInfo?>(new ChessBoard.DragStartInfo
+        {
+            CanDrag = true,
+            LegalTargets = _legalTargets.ToArray()
+        });
+    }
+
+    private Task HandleSquareClick(string square)
+    {
+        if (!CanInteract)
+            return Task.CompletedTask;
 
         if (_selectedSquare is null)
         {
@@ -482,13 +562,13 @@
                 _legalTargets = _board.GetLegalTargetSquares(square);
             }
 
-            return;
+            return Task.CompletedTask;
         }
 
         if (square == _selectedSquare)
         {
             ClearSelection();
-            return;
+            return Task.CompletedTask;
         }
 
         if (_legalTargets.Contains(square))
@@ -499,7 +579,7 @@
             if (_board.TryMakeMove(from, square))
             {
                 if (_board.IsOnMainLine)
-                    await AnalyzeLastMoveAsync();
+                    _ = EnsureVisibleMoveAnalyzedAsync();
                 else
                     _ = RefreshPositionBestAsync();
             }
@@ -513,6 +593,8 @@
         {
             ClearSelection();
         }
+
+        return Task.CompletedTask;
     }
 
     private void ClearSelection()
@@ -521,17 +603,24 @@
         _legalTargets = [];
     }
 
-    private async Task AnalyzeLastMoveAsync()
+    private async Task EnsureVisibleMoveAnalyzedAsync()
     {
-        if (_board.CurrentPly == 0)
+        if (_board.CurrentPly == 0 || !_board.IsOnMainLine || _analyzing)
+            return;
+
+        await AnalyzeMoveAtAsync(_board.CurrentPly - 1);
+    }
+
+    private async Task AnalyzeMoveAtAsync(int moveIndex)
+    {
+        if (moveIndex < 0 || GetAnalysisAt(moveIndex) is not null)
             return;
 
         _moveAnalysisCts?.Cancel();
         _moveAnalysisCts = new CancellationTokenSource();
         var ct = _moveAnalysisCts.Token;
 
-        var moveIndex = _board.CurrentPly - 1;
-        var move = _board.GetMoveAt(moveIndex);
+        var move = GetMainLineMoveAt(moveIndex);
         if (move is null)
             return;
 
@@ -557,14 +646,14 @@
             if (!ct.IsCancellationRequested)
             {
                 _moveAnalyses[moveIndex] = analysis;
-                _progress = "Готово";
-                _progressPercent = 100;
+                _progress = "";
+                _progressPercent = 0;
+                await InvokeAsync(StateHasChanged);
                 _ = RefreshPositionBestAsync();
             }
         }
         catch (OperationCanceledException)
         {
-            // новый ход отменил предыдущий анализ
         }
         catch (Exception ex)
         {
@@ -574,9 +663,7 @@
         finally
         {
             if (!ct.IsCancellationRequested)
-            {
                 _analyzingMove = false;
-            }
         }
     }
 
@@ -617,7 +704,8 @@
             await InvokeAsync(StateHasChanged);
 
             _board.LoadFromPgn(_selected.Pgn);
-            _pgnUciMoves = _board.Moves.Take(_board.MainMoveCount).Select(m => m.Uci).ToList();
+            _pgnMoves = _board.Moves.Take(_board.MainMoveCount).ToList();
+            _pgnUciMoves = _pgnMoves.Select(m => m.Uci).ToList();
             _pgnMoveCount = _pgnUciMoves.Count;
             _moveAnalyses.Clear();
             _moveAnalyses.AddRange(_result.Moves.Cast<MoveAnalysis?>());
@@ -745,4 +833,10 @@
         public static GameOutcome Draw => new("D", "outcome-draw", "Ничья");
         public static GameOutcome Unknown => new("·", "outcome-unknown", "");
     }
+
+    private readonly record struct MoveRowEntry(
+        string San,
+        int PlyIndex,
+        MoveClassification? Classification,
+        string ClassificationCss);
 }

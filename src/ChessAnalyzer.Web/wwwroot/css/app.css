@@ -275,8 +275,12 @@ button:disabled {
     cursor: default;
 }
 
-.chess-board .square:has(.piece) {
-    cursor: pointer;
+.chess-board .square:has(.piece-img) {
+    cursor: grab;
+}
+
+.chess-board .square.drag-source:has(.piece-img) {
+    cursor: grabbing;
 }
 
 .square.legal {
@@ -357,6 +361,52 @@ button:disabled {
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
     position: relative;
     background: #769656;
+}
+
+.chess-board[data-interactive="true"] {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.piece-drag-ghost {
+    position: fixed;
+    z-index: 2000;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+}
+
+.square.drag-source.light { background: #baca44; }
+.square.drag-source.dark { background: #829769; }
+
+.square.drag-hover.light { background: #cdd26a; }
+.square.drag-hover.dark { background: #aaa23b; }
+
+.square.drag-legal::after {
+    content: "";
+    position: absolute;
+    width: 28%;
+    height: 28%;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.18);
+    pointer-events: none;
+}
+
+.square.dark.drag-legal::after {
+    background: rgba(0, 0, 0, 0.28);
+}
+
+.square.drag-legal:has(.piece-img)::after {
+    width: 72%;
+    height: 72%;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: inset 0 0 0 4px rgba(0, 0, 0, 0.18);
+}
+
+.square.dark.drag-legal:has(.piece-img)::after {
+    box-shadow: inset 0 0 0 4px rgba(0, 0, 0, 0.28);
 }
 
 .square {
