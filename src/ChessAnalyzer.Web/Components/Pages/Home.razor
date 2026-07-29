@@ -52,7 +52,18 @@
         <div class="analysis-panel">
             <h2>@_selected.White vs @_selected.Black</h2>
             <button @onclick="AnalyzeAsync" disabled="@_analyzing">Анализировать</button>
-            <p class="status-text">@_progress</p>
+
+            @if (_analyzing)
+            {
+                <div class="progress-wrap">
+                    <div class="progress-bar" style="width: @(_progressPercent)%"></div>
+                </div>
+                <p class="status-text">@_progress · @_progressPercent%</p>
+            }
+            else if (!string.IsNullOrEmpty(_progress))
+            {
+                <p class="status-text">@_progress</p>
+            }
 
             @if (_result is not null)
             {
@@ -69,23 +80,50 @@
 
                 @if (_currentMove is not null)
                 {
-                    <div class="move-detail">
-                        <strong class="@GetClassCss(_currentMove.Classification)">
-                            @_currentMove.Classification.ToDisplayName()
-                        </strong>
-                        <div>Ход: @_currentMove.San</div>
-                        <div class="best-move">Лучший: @_currentMove.BestMoveSan</div>
-                        <div>Потеря: @_currentMove.CentipawnLoss cp</div>
+                    <div class="board-section">
+                        <ChessBoard Fen="@_currentMove.FenAfter"
+                                    Flip="@BoardFlipped"
+                                    PlayedUci="@_currentMove.Uci"
+                                    BestUci="@_currentMove.EvalBefore.BestMove" />
+
+                        <div class="move-detail">
+                            <div class="move-header">
+                                Ход @_currentMove.MoveNumber@( _currentMove.IsWhiteMove ? "." : "...") @_currentMove.San
+                            </div>
+                            <strong class="@GetClassCss(_currentMove.Classification)">
+                                @_currentMove.Classification.ToDisplayName()
+                            </strong>
+                            <div class="best-move">Лучший: @_currentMove.BestMoveSan</div>
+                            <div>Потеря: @_currentMove.CentipawnLoss cp</div>
+                            @if (!string.Equals(_currentMove.Uci, _currentMove.EvalBefore.BestMove, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="best-hint">Можно было: @_currentMove.BestMoveSan</div>
+                            }
+                        </div>
                     </div>
                 }
 
-                <div class="move-strip">
-                    @foreach (var move in _result.Moves)
+                <div class="move-list">
+                    @foreach (var row in GetMoveRows())
                     {
-                        <div class="move-chip @(move == _currentMove ? "active" : "")"
-                             style="border-bottom:4px solid @move.Classification.ToColorHex()"
-                             @onclick="() => _currentMove = move">
-                            @move.San
+                        <div class="move-row">
+                            <span class="move-num">@row.Number.</span>
+                            @if (row.White is not null)
+                            {
+                                <button class="move-btn @ChipClass(row.White)"
+                                        style="border-bottom: 3px solid @row.White.Classification.ToColorHex()"
+                                        @onclick="() => SelectMove(row.White)">
+                                    @row.White.San
+                                </button>
+                            }
+                            @if (row.Black is not null)
+                            {
+                                <button class="move-btn @ChipClass(row.Black)"
+                                        style="border-bottom: 3px solid @row.Black.Classification.ToColorHex()"
+                                        @onclick="() => SelectMove(row.Black)">
+                                    @row.Black.San
+                                </button>
+                            }
                         </div>
                     }
                 </div>
@@ -105,12 +143,17 @@
     private bool _loading;
     private bool _analyzing;
     private string _progress = "";
+    private int _progressPercent;
     private List<ChessComGameSummary> _allGames = [];
     private ChessComGameSummary? _selected;
     private GameAnalysisResult? _result;
     private MoveAnalysis? _currentMove;
     private int _pageIndex;
     private bool _usernameLoaded;
+
+    private bool BoardFlipped =>
+        _selected is not null
+        && string.Equals(_selected.Black, _username.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private int TotalPages => _allGames.Count == 0 ? 0 : (int)Math.Ceiling(_allGames.Count / (double)PageSize);
     private IEnumerable<ChessComGameSummary> VisibleGames =>
@@ -146,6 +189,7 @@
         _result = null;
         _currentMove = null;
         _progress = "";
+        _progressPercent = 0;
 
         try
         {
@@ -196,6 +240,26 @@
         _result = null;
         _currentMove = null;
         _progress = "";
+        _progressPercent = 0;
+    }
+
+    private void SelectMove(MoveAnalysis move) => _currentMove = move;
+
+    private string ChipClass(MoveAnalysis move) =>
+        move == _currentMove ? "active" : "";
+
+    private IEnumerable<(int Number, MoveAnalysis? White, MoveAnalysis? Black)> GetMoveRows()
+    {
+        if (_result is null)
+            yield break;
+
+        var maxMove = _result.Moves.Max(m => m.MoveNumber);
+        for (var n = 1; n <= maxMove; n++)
+        {
+            var white = _result.Moves.FirstOrDefault(m => m.MoveNumber == n && m.IsWhiteMove);
+            var black = _result.Moves.FirstOrDefault(m => m.MoveNumber == n && !m.IsWhiteMove);
+            yield return (n, white, black);
+        }
     }
 
     private async Task AnalyzeAsync()
@@ -204,19 +268,27 @@
             return;
 
         _analyzing = true;
-        _progress = "Stockfish...";
+        _progress = "Запуск Stockfish...";
+        _progressPercent = 0;
         try
         {
             var options = new AnalysisOptions { Depth = 12, FastMode = true, Threads = 1, HashMb = 16 };
             var progress = new Progress<(int current, int total, string san)>(p =>
-                _progress = $"Анализ {p.current}/{p.total}: {p.san}");
+            {
+                _progressPercent = p.total == 0 ? 0 : (int)Math.Round(p.current * 100.0 / p.total);
+                _progress = $"Анализ хода {p.current} из {p.total}: {p.san}";
+                _ = InvokeAsync(StateHasChanged);
+            });
 
             _result = await Analyzer.AnalyzeAsync(_selected, options, progress);
             _currentMove = _result.Moves.FirstOrDefault();
+            _progress = "Анализ завершён";
+            _progressPercent = 100;
         }
         catch (Exception ex)
         {
             _progress = ex.Message;
+            _progressPercent = 0;
         }
         finally
         {

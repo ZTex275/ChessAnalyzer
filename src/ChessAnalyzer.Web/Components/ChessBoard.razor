@@ -1,0 +1,56 @@
+@using ChessAnalyzer.Web.Components
+
+<div class="board-wrap">
+    <div class="chess-board @(Flip ? "flipped" : "")">
+        @foreach (var sq in Squares)
+        {
+            var fileIndex = sq.Square[0] - 'a';
+            var rank = sq.Square[1] - '0';
+            var isLight = (fileIndex + rank) % 2 == 0;
+            var classes = "square " + (isLight ? "light" : "dark");
+
+            if (PlayedFrom == sq.Square || PlayedTo == sq.Square)
+                classes += " played";
+
+            if (BestFrom == sq.Square || BestTo == sq.Square)
+                classes += " best";
+
+            <div class="@classes">
+                @if (sq.Piece != '.')
+                {
+                    <span class="piece">@ChessBoardHelper.PieceSymbol(sq.Piece)</span>
+                }
+            </div>
+        }
+    </div>
+    <div class="board-legend">
+        <span class="legend-item"><span class="dot played"></span> сыгранный</span>
+        <span class="legend-item"><span class="dot best"></span> лучший</span>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Fen { get; set; } = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    [Parameter] public bool Flip { get; set; }
+    [Parameter] public string? PlayedUci { get; set; }
+    [Parameter] public string? BestUci { get; set; }
+
+    private string? PlayedFrom { get; set; }
+    private string? PlayedTo { get; set; }
+    private string? BestFrom { get; set; }
+    private string? BestTo { get; set; }
+    private IReadOnlyList<(char Piece, string Square)> Squares { get; set; } = [];
+
+    protected override void OnParametersSet()
+    {
+        var played = ChessBoardHelper.ParseUci(PlayedUci);
+        PlayedFrom = played?.From;
+        PlayedTo = played?.To;
+
+        var best = ChessBoardHelper.ParseUci(BestUci);
+        BestFrom = best?.From;
+        BestTo = best?.To;
+
+        Squares = ChessBoardHelper.ParseFen(Fen, Flip);
+    }
+}
