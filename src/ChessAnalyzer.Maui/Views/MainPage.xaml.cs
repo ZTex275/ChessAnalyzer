@@ -9,11 +9,8 @@ public partial class MainPage : ContentPage
 
     private void OnNavigating(object? sender, WebNavigatingEventArgs e)
     {
-        if (e.Source == WebNavigationSource.NewPage)
-        {
-            Loader.IsRunning = true;
-            Loader.IsVisible = true;
-        }
+        Loader.IsRunning = true;
+        Loader.IsVisible = true;
     }
 
     private void OnNavigated(object? sender, WebNavigatedEventArgs e)
