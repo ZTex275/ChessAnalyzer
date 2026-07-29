@@ -106,6 +106,17 @@ public sealed class GameAnalyzer(IStockfishEngine engine)
         };
     }
 
+    public async Task<(EngineEvaluation Eval, string BestSan)> AnalyzePositionAsync(
+        string fen,
+        AnalysisOptions options,
+        CancellationToken ct = default)
+    {
+        await engine.InitializeAsync(options, ct);
+        var eval = await GetEvalAsync(fen, new EvalCache(), ct);
+        var bestSan = TryUciToSan(fen, eval.BestMove) ?? eval.BestMove;
+        return (eval, bestSan);
+    }
+
     private static int NormalizeCp(EngineEvaluation eval, bool isWhiteMove)
     {
         if (eval.MateIn is not null)

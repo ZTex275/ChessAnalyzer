@@ -13,6 +13,13 @@ public static class ChessBoardHelper
     public static string PieceImage(char piece) =>
         PieceImages.TryGetValue(piece, out var path) ? path : "";
 
+    public static bool IsLightSquare(string square)
+    {
+        var file = square[0] - 'a';
+        var rank = square[1] - '0';
+        return (file + rank) % 2 == 0;
+    }
+
     public static (int X, int Y) SquareCenter(string square, int squareSize, bool flip = false)
     {
         var file = square[0] - 'a';
@@ -22,35 +29,25 @@ public static class ChessBoardHelper
         return (col * squareSize + squareSize / 2, row * squareSize + squareSize / 2);
     }
 
+    public static char FileLabel(int col, bool flip) =>
+        (char)('a' + (flip ? 7 - col : col));
+
+    public static int RankLabel(int row, bool flip) =>
+        flip ? row + 1 : 8 - row;
+
     public static IReadOnlyList<(char Piece, string Square)> ParseFen(string fen, bool flip)
     {
-        var rows = fen.Split(' ')[0].Split('/');
         var squares = new List<(char, string)>(64);
 
-        for (var rankIndex = 0; rankIndex < 8; rankIndex++)
+        for (var row = 0; row < 8; row++)
         {
-            var fenRank = flip ? 7 - rankIndex : rankIndex;
-            var nameRank = flip ? rankIndex : 7 - rankIndex;
-            var fileIndex = 0;
-
-            foreach (var ch in rows[fenRank])
+            for (var col = 0; col < 8; col++)
             {
-                if (char.IsDigit(ch))
-                {
-                    var empty = ch - '0';
-                    for (var i = 0; i < empty; i++)
-                    {
-                        var file = flip ? 7 - fileIndex : fileIndex;
-                        squares.Add(('.', SquareName(file, nameRank)));
-                        fileIndex++;
-                    }
-                }
-                else
-                {
-                    var file = flip ? 7 - fileIndex : fileIndex;
-                    squares.Add((ch, SquareName(file, nameRank)));
-                    fileIndex++;
-                }
+                var file = flip ? 7 - col : col;
+                var rank = flip ? row : 7 - row;
+                var square = SquareName(file, rank);
+                var piece = GetPieceAt(fen, square);
+                squares.Add((piece ?? '.', square));
             }
         }
 
@@ -67,6 +64,36 @@ public static class ChessBoardHelper
 
     public static string PieceSymbol(char piece) =>
         PieceImages.ContainsKey(piece) ? piece.ToString() : "";
+
+    private static char? GetPieceAt(string fen, string square)
+    {
+        var file = square[0] - 'a';
+        var rank = square[1] - '1';
+        var rows = fen.Split(' ')[0].Split('/');
+        var fenRank = 7 - rank;
+        var fileIndex = 0;
+
+        foreach (var ch in rows[fenRank])
+        {
+            if (char.IsDigit(ch))
+            {
+                var empty = ch - '0';
+                if (fileIndex + empty > file)
+                    return null;
+
+                fileIndex += empty;
+            }
+            else
+            {
+                if (fileIndex == file)
+                    return ch;
+
+                fileIndex++;
+            }
+        }
+
+        return null;
+    }
 
     private static string SquareName(int file, int rank) =>
         $"{(char)('a' + file)}{rank + 1}";

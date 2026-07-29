@@ -2,60 +2,76 @@
 @using ChessAnalyzer.Core.Chess
 
 <div class="board-wrap">
-    <div class="chess-board @(Flip ? "flipped" : "")" style="--sq: @(SquareSize)px">
-        @foreach (var sq in Squares)
-        {
-            var fileIndex = sq.Square[0] - 'a';
-            var rank = sq.Square[1] - '0';
-            var isLight = (fileIndex + rank) % 2 == 0;
-            var classes = "square " + (isLight ? "light" : "dark");
+    <div class="board-with-coords" style="--sq: @(SquareSize)px">
+        <div class="rank-labels">
+            @for (var row = 0; row < 8; row++)
+            {
+                <span class="coord rank-coord">@ChessBoardHelper.RankLabel(row, Flip)</span>
+            }
+        </div>
 
-            if (Interactive && SelectedSquare == sq.Square)
-                classes += " selected";
-
-            if (Interactive && LegalTargets.Contains(sq.Square))
-                classes += " legal";
-
-            if (PlayedFrom == sq.Square)
-                classes += " played-from";
-
-            if (PlayedTo == sq.Square)
-                classes += " played-to";
-
-            if (BestFrom == sq.Square)
-                classes += " best-from";
-
-            if (BestTo == sq.Square)
-                classes += " best-to";
-
-            <div class="@classes" @onclick="() => HandleSquareClick(sq.Square)">
-                @if (sq.Piece != '.')
+        <div class="board-main">
+            <div class="chess-board" style="--sq: @(SquareSize)px">
+                @foreach (var sq in Squares)
                 {
-                    <img class="piece-img"
-                         src="@ChessBoardHelper.PieceImage(sq.Piece)"
-                         alt=""
-                         draggable="false" />
+                    var isLight = ChessBoardHelper.IsLightSquare(sq.Square);
+                    var classes = "square " + (isLight ? "light" : "dark");
+
+                    if (Interactive && SelectedSquare == sq.Square)
+                        classes += " selected";
+
+                    if (Interactive && LegalTargets.Contains(sq.Square))
+                        classes += " legal";
+
+                    if (PlayedFrom == sq.Square)
+                        classes += " played-from";
+
+                    if (PlayedTo == sq.Square)
+                        classes += " played-to";
+
+                    if (BestFrom == sq.Square)
+                        classes += " best-from";
+
+                    if (BestTo == sq.Square)
+                        classes += " best-to";
+
+                    <div class="@classes" @onclick="() => HandleSquareClick(sq.Square)">
+                        @if (sq.Piece != '.')
+                        {
+                            <img class="piece-img"
+                                 src="@ChessBoardHelper.PieceImage(sq.Piece)"
+                                 alt=""
+                                 draggable="false" />
+                        }
+                    </div>
+                }
+
+                @if (ShowBestArrow && BestFrom is not null && BestTo is not null)
+                {
+                    var (x1, y1) = ChessBoardHelper.SquareCenter(BestFrom, SquareSize, Flip);
+                    var (x2, y2) = ChessBoardHelper.SquareCenter(BestTo, SquareSize, Flip);
+                    var boardPx = SquareSize * 8;
+                    <svg class="move-arrow" viewBox="0 0 @boardPx @boardPx" aria-hidden="true">
+                        <defs>
+                            <marker id="best-arrowhead" markerWidth="7" markerHeight="7"
+                                    refX="6" refY="3.5" orient="auto">
+                                <polygon points="0 0, 7 3.5, 0 7" fill="rgba(255, 210, 60, 0.95)" />
+                            </marker>
+                        </defs>
+                        <line x1="@x1" y1="@y1" x2="@x2" y2="@y2"
+                              stroke="rgba(255, 210, 60, 0.95)" stroke-width="5"
+                              stroke-linecap="round" marker-end="url(#best-arrowhead)" />
+                    </svg>
                 }
             </div>
-        }
 
-        @if (ShowBestArrow && BestFrom is not null && BestTo is not null && BestFrom != BestTo)
-        {
-            var (x1, y1) = ChessBoardHelper.SquareCenter(BestFrom, SquareSize, Flip);
-            var (x2, y2) = ChessBoardHelper.SquareCenter(BestTo, SquareSize, Flip);
-            var boardPx = SquareSize * 8;
-            <svg class="move-arrow" viewBox="0 0 @boardPx @boardPx" aria-hidden="true">
-                <defs>
-                    <marker id="best-arrowhead" markerWidth="7" markerHeight="7"
-                            refX="6" refY="3.5" orient="auto">
-                        <polygon points="0 0, 7 3.5, 0 7" fill="rgba(255, 210, 60, 0.95)" />
-                    </marker>
-                </defs>
-                <line x1="@x1" y1="@y1" x2="@x2" y2="@y2"
-                      stroke="rgba(255, 210, 60, 0.95)" stroke-width="5"
-                      stroke-linecap="round" marker-end="url(#best-arrowhead)" />
-            </svg>
-        }
+            <div class="file-labels">
+                @for (var col = 0; col < 8; col++)
+                {
+                    <span class="coord file-coord">@ChessBoardHelper.FileLabel(col, Flip)</span>
+                }
+            </div>
+        </div>
     </div>
 
     @if (ShowLegend)
@@ -89,8 +105,7 @@
     private bool ShowBestArrow =>
         BestFrom is not null
         && BestTo is not null
-        && PlayedFrom != BestFrom
-        && PlayedTo != BestTo;
+        && !string.Equals(PlayedUci, BestUci, StringComparison.OrdinalIgnoreCase);
 
     protected override void OnParametersSet()
     {

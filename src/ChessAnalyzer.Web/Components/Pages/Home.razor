@@ -21,7 +21,7 @@
                         LegalTargets="@_legalTargets"
                         PlayedUci="@CurrentPlayedUci"
                         BestUci="@CurrentBestUci"
-                        ShowLegend="@(CurrentMoveAnalysis is not null)"
+                        ShowLegend="@(CurrentMoveAnalysis is not null || !string.IsNullOrEmpty(CurrentBestUci))"
                         OnSquareClick="HandleSquareClick" />
 
             <div class="board-nav">
@@ -51,8 +51,17 @@
                     <strong class="@GetClassCss(CurrentMoveAnalysis.Classification)">
                         @CurrentMoveAnalysis.Classification.ToDisplayName()
                     </strong>
-                    <div class="best-move">Лучший: @CurrentMoveAnalysis.BestMoveSan</div>
+                    @if (!string.Equals(CurrentMoveAnalysis.Uci, CurrentMoveAnalysis.EvalBefore.BestMove, StringComparison.OrdinalIgnoreCase))
+                    {
+                        <div class="best-move">Лучший был: @CurrentMoveAnalysis.BestMoveSan</div>
+                    }
                     <div>Потеря: @CurrentMoveAnalysis.CentipawnLoss cp</div>
+                </div>
+            }
+            else if (!string.IsNullOrEmpty(_positionBestSan))
+            {
+                <div class="move-detail">
+                    <div class="best-move">Лучший ход: @_positionBestSan</div>
                 </div>
             }
         </div>
@@ -173,6 +182,10 @@
     private List<string> _pgnUciMoves = [];
 
     private CancellationTokenSource? _moveAnalysisCts;
+    private CancellationTokenSource? _positionAnalysisCts;
+    private string? _positionBestUci;
+    private string? _positionBestSan;
+    private string _lastPositionFen = "";
 
     private bool UserIsBlackInSelectedGame =>
         _selected is not null
@@ -205,8 +218,20 @@
     private MoveAnalysis? CurrentMoveAnalysis =>
         _board.CurrentPly > 0 ? GetAnalysisAt(_board.CurrentPly - 1) : null;
 
-    private string? CurrentPlayedUci => CurrentMoveAnalysis?.Uci;
-    private string? CurrentBestUci => CurrentMoveAnalysis?.EvalBefore.BestMove;
+    private string? CurrentPlayedUci =>
+        CurrentMoveAnalysis?.Uci;
+
+    private string? CurrentBestUci
+    {
+        get
+        {
+            if (CurrentMoveAnalysis is { } m
+                && !string.Equals(m.Uci, m.EvalBefore.BestMove, StringComparison.OrdinalIgnoreCase))
+                return m.EvalBefore.BestMove;
+
+            return _positionBestUci;
+        }
+    }
 
     private int TotalPages => _allGames.Count == 0 ? 0 : (int)Math.Ceiling(_allGames.Count / (double)PageSize);
     private IEnumerable<ChessComGameSummary> VisibleGames =>
@@ -214,15 +239,20 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !_usernameLoaded)
+        if (firstRender)
         {
-            _usernameLoaded = true;
-            var saved = await JS.InvokeAsync<string?>("localStorage.getItem", UsernameKey);
-            if (!string.IsNullOrWhiteSpace(saved))
+            if (!_usernameLoaded)
             {
-                _username = saved;
-                StateHasChanged();
+                _usernameLoaded = true;
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", UsernameKey);
+                if (!string.IsNullOrWhiteSpace(saved))
+                {
+                    _username = saved;
+                    StateHasChanged();
+                }
             }
+
+            _ = RefreshPositionBestAsync();
         }
     }
 
@@ -269,7 +299,11 @@
         _moveAnalyses.Clear();
         _pgnMoveCount = 0;
         _pgnUciMoves = [];
+        _positionBestUci = null;
+        _positionBestSan = null;
+        _lastPositionFen = "";
         ClearSelection();
+        _ = RefreshPositionBestAsync();
     }
 
     private void PrevPage()
@@ -311,6 +345,7 @@
             _moveAnalyses.Clear();
             ClearSelection();
             _status = $"Партия загружена · {_board.MoveCount} ходов";
+            _ = RefreshPositionBestAsync();
         }
         catch (Exception ex)
         {
@@ -325,18 +360,21 @@
         _analyzingMove = false;
         _board.StepBack();
         ClearSelection();
+        _ = RefreshPositionBestAsync();
     }
 
     private void StepForward()
     {
         _board.StepForward();
         ClearSelection();
+        _ = RefreshPositionBestAsync();
     }
 
     private void GoToMove(int ply)
     {
         _board.GoToPly(ply);
         ClearSelection();
+        _ = RefreshPositionBestAsync();
     }
 
     private string GetPlyLabel()
@@ -469,6 +507,7 @@
                 _moveAnalyses[moveIndex] = analysis;
                 _progress = "Готово";
                 _progressPercent = 100;
+                _ = RefreshPositionBestAsync();
             }
         }
         catch (OperationCanceledException)
@@ -519,6 +558,7 @@
 
             _progress = "Анализ завершён — листайте ходы на доске";
             _progressPercent = 100;
+            _ = RefreshPositionBestAsync();
         }
         catch (Exception ex)
         {
@@ -559,10 +599,45 @@
         _ => "classification-best"
     };
 
+    private async Task RefreshPositionBestAsync()
+    {
+        if (_analyzing)
+            return;
+
+        var fen = _board.CurrentFen;
+        if (fen == _lastPositionFen)
+            return;
+
+        _positionAnalysisCts?.Cancel();
+        _positionAnalysisCts?.Dispose();
+        _positionAnalysisCts = new CancellationTokenSource();
+        var ct = _positionAnalysisCts.Token;
+
+        try
+        {
+            var (eval, bestSan) = await Analyzer.AnalyzePositionAsync(fen, _fastOptions, ct);
+            if (ct.IsCancellationRequested)
+                return;
+
+            _lastPositionFen = fen;
+            _positionBestUci = eval.BestMove;
+            _positionBestSan = bestSan;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception)
+        {
+        }
+    }
+
     public void Dispose()
     {
         _moveAnalysisCts?.Cancel();
         _moveAnalysisCts?.Dispose();
+        _positionAnalysisCts?.Cancel();
+        _positionAnalysisCts?.Dispose();
     }
 
     private readonly record struct GameOutcome(string Icon, string CssClass, string Title)
