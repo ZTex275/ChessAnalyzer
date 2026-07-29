@@ -60,6 +60,7 @@ jobs:
           dotnet publish src/ChessAnalyzer.Maui/ChessAnalyzer.Maui.csproj \
             -f net9.0-android \
             -c Release \
+            -p:EnableWindowsTargeting=true \
             -p:AndroidPackageFormat=apk \
             -p:AndroidSdkDirectory="$ANDROID_HOME"
 
