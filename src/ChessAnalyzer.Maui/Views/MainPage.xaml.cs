@@ -1,28 +1,32 @@
-using ChessAnalyzer.Core.Models;
-using ChessAnalyzer.Maui.ViewModels;
-
 namespace ChessAnalyzer.Maui.Views;
 
 public partial class MainPage : ContentPage
 {
-    private readonly AnalysisViewModel _analysisViewModel;
-
-    public MainPage(MainViewModel vm, AnalysisViewModel analysisViewModel)
+    public MainPage()
     {
         InitializeComponent();
-        BindingContext = vm;
-        _analysisViewModel = analysisViewModel;
     }
 
-    private async void OnGameSelected(object? sender, SelectionChangedEventArgs e)
+    private void OnNavigating(object? sender, WebNavigatingEventArgs e)
     {
-        if (e.CurrentSelection.FirstOrDefault() is not ChessComGameSummary game)
-            return;
+        if (e.Source == WebNavigationSource.NewPage)
+        {
+            Loader.IsRunning = true;
+            Loader.IsVisible = true;
+        }
+    }
 
-        if (sender is CollectionView cv)
-            cv.SelectedItem = null;
+    private void OnNavigated(object? sender, WebNavigatedEventArgs e)
+    {
+        Loader.IsRunning = false;
+        Loader.IsVisible = false;
 
-        _analysisViewModel.SetGame(game);
-        await Navigation.PushAsync(new AnalysisPage(_analysisViewModel));
+        if (e.Result != WebNavigationResult.Success)
+        {
+            DisplayAlert(
+                "Ошибка загрузки",
+                "Не удалось открыть приложение. Проверьте интернет и попробуйте снова.",
+                "OK");
+        }
     }
 }
