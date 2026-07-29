@@ -25,10 +25,10 @@ public sealed class GameAnalyzer(IStockfishEngine engine)
             ct.ThrowIfCancellationRequested();
             var (san, uci, fenBefore, fenAfter, isWhite) = parsedMoves[i];
 
+            progress?.Report((i + 1, parsedMoves.Count, san));
+
             var evalBefore = await GetEvalAsync(fenBefore, cache, ct);
             var evalAfter = await GetEvalAsync(fenAfter, cache, ct);
-
-            progress?.Report((i + 1, parsedMoves.Count, san));
 
             var cpBefore = NormalizeCp(evalBefore, isWhite);
             var cpAfter = NormalizeCp(evalAfter, isWhite);

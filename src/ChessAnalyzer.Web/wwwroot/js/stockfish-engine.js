@@ -1,6 +1,7 @@
 let worker = null;
 let ready = false;
 let initPromise = null;
+let configuredMultiPv = 0;
 
 function createWorker() {
     // stockfish.wasm.js needs SharedArrayBuffer (COOP/COEP headers).
@@ -97,8 +98,11 @@ export async function analyze(fen, depth, multiPv) {
     const targetDepth = Math.min(depth || 12, 16);
     const lines = multiPv || 1;
 
-    worker.postMessage(`setoption name MultiPV value ${lines}`);
-    await sendAndWaitFor('readyok', 'isready');
+    if (lines !== configuredMultiPv) {
+        worker.postMessage(`setoption name MultiPV value ${lines}`);
+        await sendAndWaitFor('readyok', 'isready');
+        configuredMultiPv = lines;
+    }
 
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
@@ -200,4 +204,5 @@ export function dispose() {
 
     ready = false;
     initPromise = null;
+    configuredMultiPv = 0;
 }

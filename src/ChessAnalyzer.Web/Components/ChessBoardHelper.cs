@@ -29,6 +29,43 @@ public static class ChessBoardHelper
         return (col + 0.5, row + 0.5);
     }
 
+    public static BestMoveArrow? BuildBestMoveArrow(string from, string to, bool flip = false)
+    {
+        var (x1, y1) = SquareCenterNorm(from, flip);
+        var (x2, y2) = SquareCenterNorm(to, flip);
+
+        var dx = x2 - x1;
+        var dy = y2 - y1;
+        var len = Math.Sqrt(dx * dx + dy * dy);
+        if (len < 0.001)
+            return null;
+
+        var ux = dx / len;
+        var uy = dy / len;
+        const double headLen = 0.34;
+        const double headHalf = 0.15;
+
+        var shaftX2 = x2 - ux * headLen * 0.92;
+        var shaftY2 = y2 - uy * headLen * 0.92;
+
+        var px = -uy;
+        var py = ux;
+        var baseX = x2 - ux * headLen;
+        var baseY = y2 - uy * headLen;
+
+        return new BestMoveArrow(
+            x1, y1, shaftX2, shaftY2,
+            x2, y2,
+            baseX + px * headHalf, baseY + py * headHalf,
+            baseX - px * headHalf, baseY - py * headHalf);
+    }
+
+    public readonly record struct BestMoveArrow(
+        double ShaftX1, double ShaftY1, double ShaftX2, double ShaftY2,
+        double TipX, double TipY,
+        double Wing1X, double Wing1Y,
+        double Wing2X, double Wing2Y);
+
     public static char FileLabel(int col, bool flip) =>
         (char)('a' + (flip ? 7 - col : col));
 

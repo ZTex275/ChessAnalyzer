@@ -14,7 +14,6 @@ public sealed class StockfishWasmEngine(IJSRuntime js) : IStockfishEngine
         _options = options;
         _module ??= await js.InvokeAsync<IJSObjectReference>("import", "./js/stockfish-engine.js");
         await _module.InvokeVoidAsync("initialize", new { hashMb = Math.Min(options.HashMb, 16) });
-        await _module.InvokeVoidAsync("configure", new { hashMb = Math.Min(options.HashMb, 16) });
     }
 
     public async Task<EngineEvaluation> AnalyzePositionAsync(string fen, CancellationToken ct = default)

@@ -557,11 +557,17 @@
             var progress = new Progress<(int current, int total, string san)>(p =>
             {
                 _progressPercent = p.total == 0 ? 0 : (int)Math.Round(p.current * 100.0 / p.total);
-                _progress = $"Анализ хода {p.current} из {p.total}: {p.san}";
+                _progress = p.current >= p.total
+                    ? $"Последний ход {p.current} из {p.total}: {p.san}"
+                    : $"Анализ хода {p.current} из {p.total}: {p.san}";
                 _ = InvokeAsync(StateHasChanged);
             });
 
             _result = await Analyzer.AnalyzeAsync(_selected, _fastOptions, progress, ct);
+
+            _progress = "Сохранение результата...";
+            _progressPercent = 100;
+            await InvokeAsync(StateHasChanged);
 
             _board.LoadFromPgn(_selected.Pgn);
             _pgnUciMoves = _board.Moves.Select(m => m.Uci).ToList();
