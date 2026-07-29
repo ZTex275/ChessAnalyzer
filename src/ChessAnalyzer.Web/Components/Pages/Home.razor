@@ -4,87 +4,131 @@
 @using ChessAnalyzer.Core.Models
 @inject ChessComClient ChessCom
 @inject GameAnalyzer Analyzer
+@inject IJSRuntime JS
 
 <div class="container">
     <h1>Chess Analyzer</h1>
     <p>Анализ партий Chess.com со Stockfish</p>
 
-    <div style="display:flex; gap:8px; margin-bottom:16px;">
-        <input @bind="_username" placeholder="Логин Chess.com" />
+    <div class="search-row">
+        <input @bind="_username" @bind:event="oninput" placeholder="Логин Chess.com" />
         <button @onclick="LoadGamesAsync" disabled="@_loading">Загрузить</button>
     </div>
 
     @if (!string.IsNullOrEmpty(_status))
     {
-        <p>@_status</p>
+        <p class="status-text">@_status</p>
     }
 
-    @foreach (var game in _games)
+    @if (_allGames.Count > 0)
     {
-        <div class="game-card" @onclick="() => SelectGame(game)">
-            <strong>@game.White vs @game.Black</strong>
-            <div>@game.Result · @game.EndTime.ToString("dd.MM.yyyy")</div>
+        <div class="games-list">
+            @foreach (var game in VisibleGames)
+            {
+                var outcome = GetOutcome(game);
+                <div class="game-card @(game == _selected ? "selected" : "")"
+                     @onclick="() => SelectGame(game)">
+                    <div class="game-card-body">
+                        <strong>@game.White vs @game.Black</strong>
+                        <div class="game-meta">@game.Result · @game.EndTime.ToString("dd.MM.yyyy")</div>
+                    </div>
+                    <div class="game-outcome @outcome.CssClass" title="@outcome.Title">@outcome.Icon</div>
+                </div>
+            }
         </div>
+
+        @if (TotalPages > 1)
+        {
+            <div class="pagination">
+                <button @onclick="PrevPage" disabled="@(_pageIndex == 0 || _loading)">← Назад</button>
+                <span>@(_pageIndex + 1) / @TotalPages</span>
+                <button @onclick="NextPage" disabled="@(_pageIndex >= TotalPages - 1 || _loading)">Вперёд →</button>
+            </div>
+        }
     }
 
     @if (_selected is not null)
     {
-        <hr />
-        <h2>@_selected.White vs @_selected.Black</h2>
-        <button @onclick="AnalyzeAsync" disabled="@_analyzing">Анализировать</button>
-        <p>@_progress</p>
+        <div class="analysis-panel">
+            <h2>@_selected.White vs @_selected.Black</h2>
+            <button @onclick="AnalyzeAsync" disabled="@_analyzing">Анализировать</button>
+            <p class="status-text">@_progress</p>
 
-        @if (_result is not null)
-        {
-            <div class="accuracy-grid">
-                <div class="accuracy-box">
-                    Белые
-                    <span>@_result.WhiteAccuracy%</span>
-                </div>
-                <div class="accuracy-box">
-                    Чёрные
-                    <span>@_result.BlackAccuracy%</span>
-                </div>
-            </div>
-
-            @if (_currentMove is not null)
+            @if (_result is not null)
             {
-                <div style="margin:12px 0;">
-                    <strong class="@GetClassCss(_currentMove.Classification)">
-                        @_currentMove.Classification.ToDisplayName()
-                    </strong>
-                    <div>Ход: @_currentMove.San</div>
-                    <div style="color:var(--green)">Лучший: @_currentMove.BestMoveSan</div>
-                    <div>Потеря: @_currentMove.CentipawnLoss cp</div>
+                <div class="accuracy-grid">
+                    <div class="accuracy-box">
+                        Белые
+                        <span>@_result.WhiteAccuracy%</span>
+                    </div>
+                    <div class="accuracy-box">
+                        Чёрные
+                        <span>@_result.BlackAccuracy%</span>
+                    </div>
                 </div>
-            }
 
-            <div class="move-strip">
-                @foreach (var move in _result.Moves)
+                @if (_currentMove is not null)
                 {
-                    <div class="move-chip @(move == _currentMove ? "active" : "")"
-                         style="border-bottom:4px solid @move.Classification.ToColorHex()"
-                         @onclick="() => _currentMove = move">
-                        @move.San
+                    <div class="move-detail">
+                        <strong class="@GetClassCss(_currentMove.Classification)">
+                            @_currentMove.Classification.ToDisplayName()
+                        </strong>
+                        <div>Ход: @_currentMove.San</div>
+                        <div class="best-move">Лучший: @_currentMove.BestMoveSan</div>
+                        <div>Потеря: @_currentMove.CentipawnLoss cp</div>
                     </div>
                 }
-            </div>
 
-            <p style="color:#666;font-size:12px;">Время: @_result.AnalysisDuration.ToString(@"mm\:ss")</p>
-        }
+                <div class="move-strip">
+                    @foreach (var move in _result.Moves)
+                    {
+                        <div class="move-chip @(move == _currentMove ? "active" : "")"
+                             style="border-bottom:4px solid @move.Classification.ToColorHex()"
+                             @onclick="() => _currentMove = move">
+                            @move.San
+                        </div>
+                    }
+                </div>
+
+                <p class="analysis-time">Время: @_result.AnalysisDuration.ToString(@"mm\:ss")</p>
+            }
+        </div>
     }
 </div>
 
 @code {
+    private const int PageSize = 5;
+    private const string UsernameKey = "chess_username";
+
     private string _username = "";
     private string _status = "";
     private bool _loading;
     private bool _analyzing;
     private string _progress = "";
-    private List<ChessComGameSummary> _games = [];
+    private List<ChessComGameSummary> _allGames = [];
     private ChessComGameSummary? _selected;
     private GameAnalysisResult? _result;
     private MoveAnalysis? _currentMove;
+    private int _pageIndex;
+    private bool _usernameLoaded;
+
+    private int TotalPages => _allGames.Count == 0 ? 0 : (int)Math.Ceiling(_allGames.Count / (double)PageSize);
+    private IEnumerable<ChessComGameSummary> VisibleGames =>
+        _allGames.Skip(_pageIndex * PageSize).Take(PageSize);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_usernameLoaded)
+        {
+            _usernameLoaded = true;
+            var saved = await JS.InvokeAsync<string?>("localStorage.getItem", UsernameKey);
+            if (!string.IsNullOrWhiteSpace(saved))
+            {
+                _username = saved;
+                StateHasChanged();
+            }
+        }
+    }
 
     private async Task LoadGamesAsync()
     {
@@ -94,22 +138,56 @@
             return;
         }
 
+        var login = _username.Trim();
         _loading = true;
         _status = "Загрузка...";
+        _pageIndex = 0;
+        _selected = null;
+        _result = null;
+        _currentMove = null;
+        _progress = "";
+
         try
         {
-            _games = (await ChessCom.GetRecentGamesAsync(_username.Trim(), 15)).ToList();
-            _status = _games.Count == 0 ? "Партии не найдены" : $"Найдено: {_games.Count}";
+            await JS.InvokeVoidAsync("localStorage.setItem", UsernameKey, login);
+            _allGames = (await ChessCom.GetRecentGamesAsync(login, 50)).ToList();
+            _status = _allGames.Count == 0
+                ? "Партии не найдены"
+                : $"Найдено: {_allGames.Count} · страница 1 из {TotalPages}";
         }
         catch (Exception ex)
         {
             _status = ex.Message;
-            _games = [];
+            _allGames = [];
         }
         finally
         {
             _loading = false;
         }
+    }
+
+    private void PrevPage()
+    {
+        if (_pageIndex > 0)
+        {
+            _pageIndex--;
+            UpdatePageStatus();
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_pageIndex < TotalPages - 1)
+        {
+            _pageIndex++;
+            UpdatePageStatus();
+        }
+    }
+
+    private void UpdatePageStatus()
+    {
+        if (_allGames.Count > 0)
+            _status = $"Найдено: {_allGames.Count} · страница {_pageIndex + 1} из {TotalPages}";
     }
 
     private void SelectGame(ChessComGameSummary game)
@@ -146,10 +224,39 @@
         }
     }
 
+    private GameOutcome GetOutcome(ChessComGameSummary game)
+    {
+        var login = _username.Trim();
+        if (string.IsNullOrEmpty(login))
+            return GameOutcome.Unknown;
+
+        var isWhite = string.Equals(game.White, login, StringComparison.OrdinalIgnoreCase);
+        var isBlack = string.Equals(game.Black, login, StringComparison.OrdinalIgnoreCase);
+
+        if (!isWhite && !isBlack)
+            return GameOutcome.Unknown;
+
+        if (game.Result == "1/2-1/2")
+            return GameOutcome.Draw;
+
+        if (isWhite)
+            return game.Result == "1-0" ? GameOutcome.Win : GameOutcome.Loss;
+
+        return game.Result == "0-1" ? GameOutcome.Win : GameOutcome.Loss;
+    }
+
     private static string GetClassCss(MoveClassification c) => c switch
     {
         MoveClassification.Blunder or MoveClassification.Mistake => "classification-blunder",
         MoveClassification.Inaccuracy => "classification-inaccuracy",
         _ => "classification-best"
     };
+
+    private readonly record struct GameOutcome(string Icon, string CssClass, string Title)
+    {
+        public static GameOutcome Win => new("W", "outcome-win", "Победа");
+        public static GameOutcome Loss => new("L", "outcome-loss", "Поражение");
+        public static GameOutcome Draw => new("D", "outcome-draw", "Ничья");
+        public static GameOutcome Unknown => new("·", "outcome-unknown", "");
+    }
 }

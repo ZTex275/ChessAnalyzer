@@ -37,15 +37,136 @@ button {
     font-weight: 600;
 }
 
+button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.search-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.search-row input {
+    flex: 1;
+}
+
+.status-text {
+    color: #aaa;
+    margin: 8px 0;
+}
+
+.games-list {
+    margin-bottom: 12px;
+}
+
 .game-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     background: var(--panel);
-    padding: 12px;
+    padding: 12px 14px;
     margin: 8px 0;
     border-radius: 8px;
     cursor: pointer;
+    border: 2px solid transparent;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
-.game-card:hover { outline: 1px solid #555; }
+.game-card:hover {
+    background: #333;
+}
+
+.game-card.selected {
+    background: #3a4a3a;
+    border-color: var(--green);
+    box-shadow: 0 0 12px rgba(38, 194, 129, 0.35);
+}
+
+.game-card-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.game-meta {
+    color: #888;
+    font-size: 13px;
+    margin-top: 4px;
+}
+
+.game-outcome {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 14px;
+}
+
+.outcome-win {
+    background: rgba(38, 194, 129, 0.2);
+    color: var(--green);
+    border: 2px solid var(--green);
+}
+
+.outcome-loss {
+    background: rgba(202, 52, 49, 0.2);
+    color: var(--red);
+    border: 2px solid var(--red);
+}
+
+.outcome-draw {
+    background: rgba(240, 193, 93, 0.15);
+    color: var(--yellow);
+    border: 2px solid var(--yellow);
+}
+
+.outcome-unknown {
+    background: #333;
+    color: #666;
+    border: 2px solid #555;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin: 12px 0 20px;
+}
+
+.pagination button {
+    min-width: 100px;
+}
+
+.pagination span {
+    color: #aaa;
+    font-size: 14px;
+}
+
+.analysis-panel {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #444;
+}
+
+.move-detail {
+    margin: 12px 0;
+}
+
+.best-move {
+    color: var(--green);
+}
+
+.analysis-time {
+    color: #666;
+    font-size: 12px;
+}
 
 .move-strip {
     display: flex;
