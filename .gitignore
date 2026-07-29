@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.cache
+*.log
+.DS_Store
+Thumbs.db
+src/ChessAnalyzer.Maui/engines/stockfish*
+src/ChessAnalyzer.Maui/engines/*.exe

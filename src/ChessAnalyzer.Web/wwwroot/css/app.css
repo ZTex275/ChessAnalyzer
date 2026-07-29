@@ -1,0 +1,90 @@
+:root {
+    --bg: #1e1e1e;
+    --panel: #2a2a2a;
+    --text: #f0f0f0;
+    --green: #26c281;
+    --red: #ca3431;
+    --yellow: #f0c15d;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: Segoe UI, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+}
+
+.container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 16px;
+}
+
+input, button {
+    padding: 10px 14px;
+    border-radius: 6px;
+    border: 1px solid #444;
+    background: var(--panel);
+    color: var(--text);
+}
+
+button {
+    background: var(--green);
+    color: #111;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.game-card {
+    background: var(--panel);
+    padding: 12px;
+    margin: 8px 0;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.game-card:hover { outline: 1px solid #555; }
+
+.move-strip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 8px 0;
+}
+
+.move-chip {
+    min-width: 64px;
+    text-align: center;
+    padding: 6px;
+    background: #333;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.move-chip.active { outline: 2px solid var(--green); }
+
+.classification-best { color: var(--green); }
+.classification-blunder { color: var(--red); }
+.classification-inaccuracy { color: var(--yellow); }
+
+.accuracy-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 12px 0;
+}
+
+.accuracy-box {
+    background: var(--panel);
+    padding: 16px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.accuracy-box span {
+    display: block;
+    font-size: 2rem;
+    font-weight: bold;
+}

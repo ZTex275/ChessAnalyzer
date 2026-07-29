@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:ChessAnalyzer.Maui.ViewModels"
+             xmlns:models="clr-namespace:ChessAnalyzer.Core.Models;assembly=ChessAnalyzer.Core"
+             x:Class="ChessAnalyzer.Maui.Views.MainPage"
+             x:DataType="vm:MainViewModel"
+             Title="Chess Analyzer"
+             BackgroundColor="{StaticResource BgDark}">
+
+    <Grid RowDefinitions="Auto,Auto,*" Padding="16" RowSpacing="12">
+        <Label Text="Chess.com Analyzer"
+               FontSize="24"
+               TextColor="{StaticResource TextLight}"
+               FontAttributes="Bold" />
+
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <Entry Text="{Binding Username}"
+                   Placeholder="Логин Chess.com"
+                   TextColor="White"
+                   PlaceholderColor="#888"
+                   BackgroundColor="#2A2A2A" />
+            <Button Grid.Column="1"
+                    Text="Загрузить"
+                    Command="{Binding LoadGamesCommand}"
+                    BackgroundColor="{StaticResource AccentGreen}"
+                    TextColor="Black" />
+        </Grid>
+
+        <ActivityIndicator Grid.Row="2"
+                           IsRunning="{Binding IsLoading}"
+                           IsVisible="{Binding IsLoading}"
+                           Color="{StaticResource AccentGreen}"
+                           VerticalOptions="Start"
+                           HorizontalOptions="Center" />
+
+        <CollectionView Grid.Row="2"
+                        ItemsSource="{Binding Games}"
+                        SelectionMode="Single"
+                        SelectionChanged="OnGameSelected">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:ChessComGameSummary">
+                    <Border Margin="0,4" Padding="12" BackgroundColor="#2A2A2A" Stroke="#444">
+                        <VerticalStackLayout Spacing="4">
+                            <HorizontalStackLayout Spacing="4">
+                                <Label Text="{Binding White}" TextColor="White" FontAttributes="Bold" />
+                                <Label Text=" vs " TextColor="#888" />
+                                <Label Text="{Binding Black}" TextColor="White" FontAttributes="Bold" />
+                            </HorizontalStackLayout>
+                            <Label Text="{Binding Result, StringFormat='Результат: {0}'}"
+                                   TextColor="#AAA" />
+                            <Label Text="{Binding EndTime, StringFormat='{0:dd.MM.yyyy HH:mm}'}"
+                                   TextColor="#888"
+                                   FontSize="12" />
+                        </VerticalStackLayout>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <Label Grid.Row="2"
+               Text="{Binding Status}"
+               TextColor="#888"
+               VerticalOptions="End"
+               HorizontalOptions="Center" />
+    </Grid>
+</ContentPage>

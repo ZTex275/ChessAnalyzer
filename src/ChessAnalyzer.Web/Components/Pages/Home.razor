@@ -1,0 +1,155 @@
+@page "/"
+@using ChessAnalyzer.Core.Analysis
+@using ChessAnalyzer.Core.ChessCom
+@using ChessAnalyzer.Core.Models
+@inject ChessComClient ChessCom
+@inject GameAnalyzer Analyzer
+
+<div class="container">
+    <h1>Chess Analyzer</h1>
+    <p>Анализ партий Chess.com со Stockfish</p>
+
+    <div style="display:flex; gap:8px; margin-bottom:16px;">
+        <input @bind="_username" placeholder="Логин Chess.com" />
+        <button @onclick="LoadGamesAsync" disabled="@_loading">Загрузить</button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <p>@_status</p>
+    }
+
+    @foreach (var game in _games)
+    {
+        <div class="game-card" @onclick="() => SelectGame(game)">
+            <strong>@game.White vs @game.Black</strong>
+            <div>@game.Result · @game.EndTime.ToString("dd.MM.yyyy")</div>
+        </div>
+    }
+
+    @if (_selected is not null)
+    {
+        <hr />
+        <h2>@_selected.White vs @_selected.Black</h2>
+        <button @onclick="AnalyzeAsync" disabled="@_analyzing">Анализировать</button>
+        <p>@_progress</p>
+
+        @if (_result is not null)
+        {
+            <div class="accuracy-grid">
+                <div class="accuracy-box">
+                    Белые
+                    <span>@_result.WhiteAccuracy%</span>
+                </div>
+                <div class="accuracy-box">
+                    Чёрные
+                    <span>@_result.BlackAccuracy%</span>
+                </div>
+            </div>
+
+            @if (_currentMove is not null)
+            {
+                <div style="margin:12px 0;">
+                    <strong class="@GetClassCss(_currentMove.Classification)">
+                        @_currentMove.Classification.ToDisplayName()
+                    </strong>
+                    <div>Ход: @_currentMove.San</div>
+                    <div style="color:var(--green)">Лучший: @_currentMove.BestMoveSan</div>
+                    <div>Потеря: @_currentMove.CentipawnLoss cp</div>
+                </div>
+            }
+
+            <div class="move-strip">
+                @foreach (var move in _result.Moves)
+                {
+                    <div class="move-chip @(move == _currentMove ? "active" : "")"
+                         style="border-bottom:4px solid @move.Classification.ToColorHex()"
+                         @onclick="() => _currentMove = move">
+                        @move.San
+                    </div>
+                }
+            </div>
+
+            <p style="color:#666;font-size:12px;">Время: @_result.AnalysisDuration.ToString(@"mm\:ss")</p>
+        }
+    }
+</div>
+
+@code {
+    private string _username = "";
+    private string _status = "";
+    private bool _loading;
+    private bool _analyzing;
+    private string _progress = "";
+    private List<ChessComGameSummary> _games = [];
+    private ChessComGameSummary? _selected;
+    private GameAnalysisResult? _result;
+    private MoveAnalysis? _currentMove;
+
+    private async Task LoadGamesAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_username))
+        {
+            _status = "Укажите логин";
+            return;
+        }
+
+        _loading = true;
+        _status = "Загрузка...";
+        try
+        {
+            _games = (await ChessCom.GetRecentGamesAsync(_username.Trim(), 15)).ToList();
+            _status = _games.Count == 0 ? "Партии не найдены" : $"Найдено: {_games.Count}";
+        }
+        catch (Exception ex)
+        {
+            _status = ex.Message;
+            _games = [];
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void SelectGame(ChessComGameSummary game)
+    {
+        _selected = game;
+        _result = null;
+        _currentMove = null;
+        _progress = "";
+    }
+
+    private async Task AnalyzeAsync()
+    {
+        if (_selected is null)
+            return;
+
+        _analyzing = true;
+        _progress = "Stockfish...";
+        try
+        {
+            var options = new AnalysisOptions { Depth = 14, FastMode = true, Threads = 4, HashMb = 128 };
+            var progress = new Progress<(int current, int total, string san)>(p =>
+                _progress = $"Анализ {p.current}/{p.total}: {p.san}");
+
+            _result = await Analyzer.AnalyzeAsync(_selected, options, progress);
+            _currentMove = _result.Moves.FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            _progress = ex.Message;
+        }
+        finally
+        {
+            _analyzing = false;
+        }
+    }
+
+    private static string GetClassCss(MoveClassification c) => c switch
+    {
+        MoveClassification.Blunder or MoveClassification.Mistake => "classification-blunder",
+        MoveClassification.Inaccuracy => "classification-inaccuracy",
+        _ => "classification-best"
+    };
+}
