@@ -55,15 +55,13 @@ jobs:
           cp /tmp/stockfish/stockfish-android-armv8 src/ChessAnalyzer.Maui/engines/stockfish
           chmod +x src/ChessAnalyzer.Maui/engines/stockfish
 
-      - name: Restore and build Release APK
+      - name: Build Release APK
         run: |
-          dotnet restore src/ChessAnalyzer.Maui/ChessAnalyzer.Maui.csproj -f net9.0-android
           dotnet publish src/ChessAnalyzer.Maui/ChessAnalyzer.Maui.csproj \
             -f net9.0-android \
             -c Release \
             -p:AndroidPackageFormat=apk \
-            -p:AndroidSdkDirectory="$ANDROID_HOME" \
-            --no-restore
+            -p:AndroidSdkDirectory="$ANDROID_HOME"
 
       - name: Collect APK
         run: |
