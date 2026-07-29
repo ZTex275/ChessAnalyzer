@@ -1,3 +1,5 @@
+using ChessAnalyzer.Maui.Views;
+
 namespace ChessAnalyzer.Maui;
 
 public partial class App : Application
