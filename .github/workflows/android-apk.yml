@@ -55,6 +55,15 @@ jobs:
           cp /tmp/stockfish/stockfish-android-armv8 src/ChessAnalyzer.Maui/engines/stockfish
           chmod +x src/ChessAnalyzer.Maui/engines/stockfish
 
+      - name: Create signing keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore chessanalyzer.keystore \
+            -alias chessanalyzer \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=ChessAnalyzer, OU=Mobile, O=ChessAnalyzer, L=Unknown, ST=Unknown, C=US"
+
       - name: Build Release APK
         run: |
           dotnet publish src/ChessAnalyzer.Maui/ChessAnalyzer.Maui.csproj \
@@ -62,24 +71,34 @@ jobs:
             -c Release \
             -p:EnableWindowsTargeting=true \
             -p:AndroidPackageFormat=apk \
-            -p:AndroidSdkDirectory="$ANDROID_HOME"
+            -p:AndroidSdkDirectory="$ANDROID_HOME" \
+            -p:AndroidKeyStore=true \
+            -p:AndroidSigningKeyStore="$PWD/chessanalyzer.keystore" \
+            -p:AndroidSigningKeyAlias=chessanalyzer \
+            -p:AndroidSigningStorePass=android \
+            -p:AndroidSigningKeyPass=android
 
       - name: Collect APK
         run: |
-          APK=$(find . -path '*/Release/*-Signed.apk' -o -path '*/Release/*.apk' | head -1)
-          test -n "$APK"
-          cp "$APK" ChessAnalyzer-1.0.apk
-          ls -la ChessAnalyzer-1.0.apk
+          find . -name '*.apk' -type f | sort
+          APK=$(find . -path '*/Release/*-Signed.apk' -type f | head -1)
+          if [ -z "$APK" ]; then
+            echo "Signed APK not found"
+            exit 1
+          fi
+          cp "$APK" ChessAnalyzer-1.0.1.apk
+          jarsigner -verify ChessAnalyzer-1.0.1.apk
+          ls -la ChessAnalyzer-1.0.1.apk
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: ChessAnalyzer-1.0.apk
+          path: ChessAnalyzer-1.0.1.apk
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ChessAnalyzer-1.0.apk
+          files: ChessAnalyzer-1.0.1.apk
           generate_release_notes: true
