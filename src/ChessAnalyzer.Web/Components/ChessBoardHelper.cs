@@ -20,13 +20,13 @@ public static class ChessBoardHelper
         return (file + rank) % 2 == 0;
     }
 
-    public static (int X, int Y) SquareCenter(string square, int squareSize, bool flip = false)
+    public static (double X, double Y) SquareCenterNorm(string square, bool flip = false)
     {
         var file = square[0] - 'a';
         var rank = square[1] - '1';
         var col = flip ? 7 - file : file;
         var row = flip ? rank : 7 - rank;
-        return (col * squareSize + squareSize / 2, row * squareSize + squareSize / 2);
+        return (col + 0.5, row + 0.5);
     }
 
     public static char FileLabel(int col, bool flip) =>

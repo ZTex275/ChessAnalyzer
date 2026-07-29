@@ -2,7 +2,7 @@
 @using ChessAnalyzer.Core.Chess
 
 <div class="board-wrap">
-    <div class="board-with-coords" style="--sq: @(SquareSize)px">
+    <div class="board-with-coords">
         <div class="rank-labels">
             @for (var row = 0; row < 8; row++)
             {
@@ -11,7 +11,7 @@
         </div>
 
         <div class="board-main">
-            <div class="chess-board" style="--sq: @(SquareSize)px">
+            <div class="chess-board">
                 @foreach (var sq in Squares)
                 {
                     var isLight = ChessBoardHelper.IsLightSquare(sq.Square);
@@ -48,18 +48,20 @@
 
                 @if (ShowBestArrow && BestFrom is not null && BestTo is not null)
                 {
-                    var (x1, y1) = ChessBoardHelper.SquareCenter(BestFrom, SquareSize, Flip);
-                    var (x2, y2) = ChessBoardHelper.SquareCenter(BestTo, SquareSize, Flip);
-                    var boardPx = SquareSize * 8;
-                    <svg class="move-arrow" viewBox="0 0 @boardPx @boardPx" aria-hidden="true">
+                    var (x1, y1) = ChessBoardHelper.SquareCenterNorm(BestFrom, Flip);
+                    var (x2, y2) = ChessBoardHelper.SquareCenterNorm(BestTo, Flip);
+                    <svg class="move-arrow" viewBox="0 0 8 8" aria-hidden="true">
                         <defs>
-                            <marker id="best-arrowhead" markerWidth="7" markerHeight="7"
-                                    refX="6" refY="3.5" orient="auto">
-                                <polygon points="0 0, 7 3.5, 0 7" fill="rgba(255, 210, 60, 0.95)" />
+                            <marker id="best-arrowhead" markerWidth="0.35" markerHeight="0.35"
+                                    refX="0.3" refY="0.175" orient="auto">
+                                <polygon points="0 0, 0.35 0.175, 0 0.35" fill="rgba(255, 210, 60, 0.95)" />
                             </marker>
                         </defs>
-                        <line x1="@x1" y1="@y1" x2="@x2" y2="@y2"
-                              stroke="rgba(255, 210, 60, 0.95)" stroke-width="5"
+                        <line x1="@x1.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                              y1="@y1.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                              x2="@x2.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                              y2="@y2.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                              stroke="rgba(255, 210, 60, 0.95)" stroke-width="0.2"
                               stroke-linecap="round" marker-end="url(#best-arrowhead)" />
                     </svg>
                 }
@@ -84,8 +86,6 @@
 </div>
 
 @code {
-    private const int SquareSize = 52;
-
     [Parameter] public string Fen { get; set; } = BoardState.StartFen;
     [Parameter] public bool Flip { get; set; }
     [Parameter] public string? PlayedUci { get; set; }

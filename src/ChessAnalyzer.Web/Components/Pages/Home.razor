@@ -109,7 +109,10 @@
         {
             <div class="analysis-panel">
                 <h2>@_selected.White vs @_selected.Black</h2>
-                <button @onclick="AnalyzeGameAsync" disabled="@(_analyzing || _analyzingMove)">Анализировать партию</button>
+                <div class="analysis-actions">
+                    <button @onclick="AnalyzeGameAsync" disabled="@(_analyzing || _analyzingMove)">Анализировать партию</button>
+                    <button class="btn-stop" @onclick="StopAnalysis" disabled="@(!_analyzing)">Остановить</button>
+                </div>
 
                 @if (_result is not null)
                 {
@@ -182,6 +185,7 @@
     private List<string> _pgnUciMoves = [];
 
     private CancellationTokenSource? _moveAnalysisCts;
+    private CancellationTokenSource? _gameAnalysisCts;
     private CancellationTokenSource? _positionAnalysisCts;
     private string? _positionBestUci;
     private string? _positionBestSan;
@@ -528,10 +532,20 @@
         }
     }
 
+    private void StopAnalysis()
+    {
+        _gameAnalysisCts?.Cancel();
+    }
+
     private async Task AnalyzeGameAsync()
     {
         if (_selected is null)
             return;
+
+        _gameAnalysisCts?.Cancel();
+        _gameAnalysisCts?.Dispose();
+        _gameAnalysisCts = new CancellationTokenSource();
+        var ct = _gameAnalysisCts.Token;
 
         _analyzing = true;
         _progress = "Запуск Stockfish...";
@@ -547,7 +561,7 @@
                 _ = InvokeAsync(StateHasChanged);
             });
 
-            _result = await Analyzer.AnalyzeAsync(_selected, _fastOptions, progress);
+            _result = await Analyzer.AnalyzeAsync(_selected, _fastOptions, progress, ct);
 
             _board.LoadFromPgn(_selected.Pgn);
             _pgnUciMoves = _board.Moves.Select(m => m.Uci).ToList();
@@ -559,6 +573,11 @@
             _progress = "Анализ завершён — листайте ходы на доске";
             _progressPercent = 100;
             _ = RefreshPositionBestAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            _progress = "Анализ остановлен";
+            _progressPercent = 0;
         }
         catch (Exception ex)
         {
@@ -636,6 +655,8 @@
     {
         _moveAnalysisCts?.Cancel();
         _moveAnalysisCts?.Dispose();
+        _gameAnalysisCts?.Cancel();
+        _gameAnalysisCts?.Dispose();
         _positionAnalysisCts?.Cancel();
         _positionAnalysisCts?.Dispose();
     }
