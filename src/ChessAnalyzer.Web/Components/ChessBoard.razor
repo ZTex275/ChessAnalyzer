@@ -2,7 +2,7 @@
 @using ChessAnalyzer.Core.Chess
 
 <div class="board-wrap">
-    <div class="chess-board @(Flip ? "flipped" : "")">
+    <div class="chess-board @(Flip ? "flipped" : "")" style="--sq: @(SquareSize)px">
         @foreach (var sq in Squares)
         {
             var fileIndex = sq.Square[0] - 'a';
@@ -16,20 +16,48 @@
             if (Interactive && LegalTargets.Contains(sq.Square))
                 classes += " legal";
 
-            if (PlayedFrom == sq.Square || PlayedTo == sq.Square)
-                classes += " played";
+            if (PlayedFrom == sq.Square)
+                classes += " played-from";
 
-            if (BestFrom == sq.Square || BestTo == sq.Square)
-                classes += " best";
+            if (PlayedTo == sq.Square)
+                classes += " played-to";
+
+            if (BestFrom == sq.Square)
+                classes += " best-from";
+
+            if (BestTo == sq.Square)
+                classes += " best-to";
 
             <div class="@classes" @onclick="() => HandleSquareClick(sq.Square)">
                 @if (sq.Piece != '.')
                 {
-                    <span class="piece">@ChessBoardHelper.PieceSymbol(sq.Piece)</span>
+                    <img class="piece-img"
+                         src="@ChessBoardHelper.PieceImage(sq.Piece)"
+                         alt=""
+                         draggable="false" />
                 }
             </div>
         }
+
+        @if (ShowBestArrow && BestFrom is not null && BestTo is not null && BestFrom != BestTo)
+        {
+            var (x1, y1) = ChessBoardHelper.SquareCenter(BestFrom, SquareSize, Flip);
+            var (x2, y2) = ChessBoardHelper.SquareCenter(BestTo, SquareSize, Flip);
+            var boardPx = SquareSize * 8;
+            <svg class="move-arrow" viewBox="0 0 @boardPx @boardPx" aria-hidden="true">
+                <defs>
+                    <marker id="best-arrowhead" markerWidth="7" markerHeight="7"
+                            refX="6" refY="3.5" orient="auto">
+                        <polygon points="0 0, 7 3.5, 0 7" fill="rgba(255, 210, 60, 0.95)" />
+                    </marker>
+                </defs>
+                <line x1="@x1" y1="@y1" x2="@x2" y2="@y2"
+                      stroke="rgba(255, 210, 60, 0.95)" stroke-width="5"
+                      stroke-linecap="round" marker-end="url(#best-arrowhead)" />
+            </svg>
+        }
     </div>
+
     @if (ShowLegend)
     {
         <div class="board-legend">
@@ -40,6 +68,8 @@
 </div>
 
 @code {
+    private const int SquareSize = 52;
+
     [Parameter] public string Fen { get; set; } = BoardState.StartFen;
     [Parameter] public bool Flip { get; set; }
     [Parameter] public string? PlayedUci { get; set; }
@@ -55,6 +85,12 @@
     private string? BestFrom { get; set; }
     private string? BestTo { get; set; }
     private IReadOnlyList<(char Piece, string Square)> Squares { get; set; } = [];
+
+    private bool ShowBestArrow =>
+        BestFrom is not null
+        && BestTo is not null
+        && PlayedFrom != BestFrom
+        && PlayedTo != BestTo;
 
     protected override void OnParametersSet()
     {

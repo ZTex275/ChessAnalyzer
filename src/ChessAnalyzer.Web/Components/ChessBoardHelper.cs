@@ -2,11 +2,25 @@ namespace ChessAnalyzer.Web.Components;
 
 public static class ChessBoardHelper
 {
-    private static readonly Dictionary<char, string> PieceSymbols = new()
+    private static readonly Dictionary<char, string> PieceImages = new()
     {
-        ['K'] = "♔", ['Q'] = "♕", ['R'] = "♖", ['B'] = "♗", ['N'] = "♘", ['P'] = "♙",
-        ['k'] = "♚", ['q'] = "♛", ['r'] = "♜", ['b'] = "♝", ['n'] = "♞", ['p'] = "♟"
+        ['K'] = "pieces/wK.png", ['Q'] = "pieces/wQ.png", ['R'] = "pieces/wR.png",
+        ['B'] = "pieces/wB.png", ['N'] = "pieces/wN.png", ['P'] = "pieces/wP.png",
+        ['k'] = "pieces/bK.png", ['q'] = "pieces/bQ.png", ['r'] = "pieces/bR.png",
+        ['b'] = "pieces/bB.png", ['n'] = "pieces/bN.png", ['p'] = "pieces/bP.png"
     };
+
+    public static string PieceImage(char piece) =>
+        PieceImages.TryGetValue(piece, out var path) ? path : "";
+
+    public static (int X, int Y) SquareCenter(string square, int squareSize, bool flip = false)
+    {
+        var file = square[0] - 'a';
+        var rank = square[1] - '1';
+        var displayFile = flip ? 7 - file : file;
+        var displayRank = flip ? rank : 7 - rank;
+        return (displayFile * squareSize + squareSize / 2, displayRank * squareSize + squareSize / 2);
+    }
 
     public static IReadOnlyList<(char Piece, string Square)> ParseFen(string fen, bool flip)
     {
@@ -52,7 +66,7 @@ public static class ChessBoardHelper
     }
 
     public static string PieceSymbol(char piece) =>
-        PieceSymbols.TryGetValue(piece, out var symbol) ? symbol : "";
+        PieceImages.ContainsKey(piece) ? piece.ToString() : "";
 
     private static string SquareName(int file, int rank) =>
         $"{(char)('a' + file)}{rank + 1}";
