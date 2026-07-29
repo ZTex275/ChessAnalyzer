@@ -51,9 +51,12 @@
                                  alt=""
                                  draggable="false" />
                         }
-                        @if (ShowMoveBadge && PlayedTo == sq.Square && LastMoveClassification is { } badgeClass)
+                        @if (MoveBadges.TryGetValue(sq.Square, out var badgeClass) && badgeClass.HasIcon())
                         {
-                            <span class="piece-class-badge @badgeClass.ToCssClass()"
+                            var badgeClasses = "piece-class-badge " + badgeClass.ToCssClass();
+                            if (HighlightBadgeSquare == sq.Square)
+                                badgeClasses += " piece-class-badge-current";
+                            <span class="@badgeClasses"
                                   title="@badgeClass.ToDisplayName()">
                                 @badgeClass.ToIcon()
                             </span>
@@ -99,7 +102,9 @@
     [Parameter] public bool Flip { get; set; }
     [Parameter] public string? PlayedUci { get; set; }
     [Parameter] public string? BestUci { get; set; }
-    [Parameter] public MoveClassification? LastMoveClassification { get; set; }
+    [Parameter] public IReadOnlyDictionary<string, MoveClassification> MoveBadges { get; set; }
+        = new Dictionary<string, MoveClassification>();
+    [Parameter] public string? HighlightBadgeSquare { get; set; }
     [Parameter] public bool Interactive { get; set; }
     [Parameter] public string? SelectedSquare { get; set; }
     [Parameter] public IReadOnlyList<string> LegalTargets { get; set; } = [];
@@ -124,9 +129,6 @@
         BestFrom is not null
         && BestTo is not null
         && !string.Equals(PlayedUci, BestUci, StringComparison.OrdinalIgnoreCase);
-
-    private bool ShowMoveBadge =>
-        LastMoveClassification is { } c && c.HasIcon() && PlayedTo is not null;
 
     protected override void OnParametersSet()
     {

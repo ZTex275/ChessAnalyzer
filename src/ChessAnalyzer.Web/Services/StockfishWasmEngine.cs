@@ -6,6 +6,7 @@ namespace ChessAnalyzer.Web.Services;
 
 public sealed class StockfishWasmEngine(IJSRuntime js) : IStockfishEngine
 {
+    private static readonly SemaphoreSlim AnalysisLock = new(1, 1);
     private IJSObjectReference? _module;
     private AnalysisOptions _options = new();
 
@@ -30,17 +31,25 @@ public sealed class StockfishWasmEngine(IJSRuntime js) : IStockfishEngine
         if (_module is null)
             throw new InvalidOperationException("Stockfish WASM is not initialized");
 
-        var depth = _options.FastMode ? Math.Min(_options.Depth, 12) : Math.Min(_options.Depth, 14);
-        var raw = await _module.InvokeAsync<List<JsEngineEvaluation>>("analyze", fen, depth, multiPv);
-
-        return raw.Select(x => new EngineEvaluation
+        await AnalysisLock.WaitAsync(ct);
+        try
         {
-            Centipawns = x.Centipawns,
-            MateIn = x.MateIn,
-            BestMove = x.BestMove,
-            PvLine = x.PvLine,
-            Depth = x.Depth
-        }).ToList();
+            var depth = _options.FastMode ? Math.Min(_options.Depth, 12) : Math.Min(_options.Depth, 14);
+            var raw = await _module.InvokeAsync<List<JsEngineEvaluation>>("analyze", fen, depth, multiPv);
+
+            return raw.Select(x => new EngineEvaluation
+            {
+                Centipawns = x.Centipawns,
+                MateIn = x.MateIn,
+                BestMove = x.BestMove,
+                PvLine = x.PvLine,
+                Depth = x.Depth
+            }).ToList();
+        }
+        finally
+        {
+            AnalysisLock.Release();
+        }
     }
 
     public async ValueTask DisposeAsync()

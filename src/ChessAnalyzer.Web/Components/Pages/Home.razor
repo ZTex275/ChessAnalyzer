@@ -21,8 +21,9 @@
                         LegalTargets="@_legalTargets"
                         PlayedUci="@CurrentPlayedUci"
                         BestUci="@CurrentBestUci"
-                        LastMoveClassification="@CurrentMoveClassification"
-                        ShowLegend="@(CurrentMoveAnalysis is not null || !string.IsNullOrEmpty(CurrentBestUci))"
+                        MoveBadges="@VisibleMoveBadges"
+                        HighlightBadgeSquare="@CurrentHighlightBadgeSquare"
+                        ShowLegend="@(VisibleMoveBadges.Count > 0 || !string.IsNullOrEmpty(CurrentBestUci))"
                         QueryDragStart="QueryDragStart"
                         OnPieceDrop="HandlePieceDrop"
                         OnSquareClick="HandleSquareClick" />
@@ -31,6 +32,9 @@
                 <button @onclick="StepBack" disabled="@(!_board.CanStepBack || _analyzing)">← Назад</button>
                 <span class="ply-indicator">@GetPlyLabel()</span>
                 <button @onclick="StepForward" disabled="@(!_board.CanStepForward || _analyzing)">Вперёд →</button>
+                <button class="btn-flip-board" @onclick="ToggleBoardFlip" title="Перевернуть доску">
+                    @(BoardFlipped ? "С белых" : "С чёрных")
+                </button>
             </div>
 
             @if (IsInVariation)
@@ -229,6 +233,7 @@
     private CancellationTokenSource? _backgroundAnalysisCts;
     private CancellationTokenSource? _positionAnalysisCts;
     private EvalCache? _backgroundEvalCache;
+    private bool _boardFlipped;
     private string? _positionBestUci;
     private string? _positionBestSan;
     private string _lastPositionFen = "";
@@ -242,7 +247,7 @@
 
     private bool CanInteract => !_analyzing;
 
-    private bool BoardFlipped => UserIsBlackInSelectedGame;
+    private bool BoardFlipped => _boardFlipped;
 
     private MoveAnalysis? CurrentMoveAnalysis
     {
@@ -269,6 +274,50 @@
 
     private MoveClassification? CurrentMoveClassification =>
         CurrentMoveAnalysis?.Classification;
+
+    private string? CurrentHighlightBadgeSquare =>
+        _board.CurrentPly == 0 || IsInVariation
+            ? null
+            : GetMoveDestinationSquare(_board.CurrentPly - 1);
+
+    private IReadOnlyDictionary<string, MoveClassification> VisibleMoveBadges
+    {
+        get
+        {
+            if (_board.CurrentPly == 0 || IsInVariation || _selected is null)
+                return EmptyBadges;
+
+            var badges = new Dictionary<string, MoveClassification>();
+            for (var i = 0; i < _board.CurrentPly; i++)
+            {
+                var analysis = GetAnalysisAt(i);
+                if (analysis is null || !analysis.Classification.HasIcon())
+                    continue;
+
+                var to = GetMoveDestinationSquare(i);
+                if (to is not null)
+                    badges[to] = analysis.Classification;
+            }
+
+            return badges;
+        }
+    }
+
+    private static readonly IReadOnlyDictionary<string, MoveClassification> EmptyBadges =
+        new Dictionary<string, MoveClassification>();
+
+    private string? GetMoveDestinationSquare(int moveIndex)
+    {
+        var analysis = GetAnalysisAt(moveIndex);
+        if (analysis?.Uci.Length >= 4)
+            return analysis.Uci[2..4];
+
+        var move = GetMainLineMoveAt(moveIndex);
+        if (move?.Uci.Length >= 4)
+            return move.Value.Uci[2..4];
+
+        return null;
+    }
 
     private string? CurrentBestUci
     {
@@ -396,6 +445,9 @@
             _pgnUciMoves = _pgnMoves.Select(m => m.Uci).ToList();
             _pgnMoveCount = _pgnUciMoves.Count;
             _moveAnalyses.Clear();
+            for (var i = 0; i < _pgnMoveCount; i++)
+                _moveAnalyses.Add(null);
+            _boardFlipped = UserIsBlackInSelectedGame;
             ClearSelection();
             _board.GoToPly(0);
             _status = $"Партия загружена · {_board.MainMoveCount} ходов";
@@ -407,6 +459,11 @@
             _status = ex.Message;
             ResetBoard();
         }
+    }
+
+    private void ToggleBoardFlip()
+    {
+        _boardFlipped = !_boardFlipped;
     }
 
     private void StepBack()
@@ -605,7 +662,7 @@
 
     private async Task EnsureVisibleMoveAnalyzedAsync()
     {
-        if (_board.CurrentPly == 0 || !_board.IsOnMainLine || _analyzing || _result is not null)
+        if (_board.CurrentPly == 0 || !_board.IsOnMainLine || _analyzing)
             return;
 
         var moveIndex = _board.CurrentPly - 1;
@@ -642,7 +699,12 @@
         try
         {
             var analyzed = CountAnalyzedMoves();
-            for (var i = 0; i < _pgnMoveCount; i++)
+            var priorityPly = Math.Max(0, _board.CurrentPly);
+            var order = Enumerable.Range(0, _pgnMoveCount)
+                .OrderBy(i => i < priorityPly ? 0 : 1)
+                .ThenBy(i => i);
+
+            foreach (var i in order)
             {
                 ct.ThrowIfCancellationRequested();
 
@@ -848,7 +910,7 @@
 
     private async Task RefreshPositionBestAsync()
     {
-        if (_analyzing)
+        if (_analyzing || _backgroundAnalyzing)
             return;
 
         var fen = _board.CurrentFen;

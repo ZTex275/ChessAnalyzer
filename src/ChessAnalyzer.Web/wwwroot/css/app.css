@@ -226,6 +226,12 @@ button:disabled {
     padding: 10px 8px;
 }
 
+.btn-flip-board {
+    flex: 1 1 100%;
+    background: #444;
+    color: var(--text);
+}
+
 .ply-indicator {
     color: #aaa;
     font-size: 13px;
@@ -486,6 +492,12 @@ button:disabled {
 .piece-class-badge.badge-miss {
     background: #CA3431;
     color: #fff;
+}
+
+.piece-class-badge-current {
+    outline: 2px solid rgba(255, 255, 255, 0.95);
+    outline-offset: 1px;
+    z-index: 5;
 }
 
 .square.selected.light { background: #baca44; }
