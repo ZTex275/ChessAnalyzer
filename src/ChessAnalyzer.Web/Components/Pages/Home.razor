@@ -169,13 +169,38 @@
     private bool _usernameLoaded;
     private string? _selectedSquare;
     private IReadOnlyList<string> _legalTargets = [];
+    private int _pgnMoveCount;
+    private List<string> _pgnUciMoves = [];
+
     private CancellationTokenSource? _moveAnalysisCts;
 
-    private bool CanInteract => !_analyzing && _board.CurrentPly == _board.MoveCount;
-
-    private bool BoardFlipped =>
+    private bool UserIsBlackInSelectedGame =>
         _selected is not null
         && string.Equals(_selected.Black, _username.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private bool IsInVariation
+    {
+        get
+        {
+            if (_pgnMoveCount == 0)
+                return false;
+
+            if (_board.MoveCount != _pgnMoveCount)
+                return true;
+
+            for (var i = 0; i < _board.MoveCount; i++)
+            {
+                if (!string.Equals(_board.Moves[i].Uci, _pgnUciMoves[i], StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+    }
+
+    private bool CanInteract => !_analyzing;
+
+    private bool BoardFlipped => UserIsBlackInSelectedGame;
 
     private MoveAnalysis? CurrentMoveAnalysis =>
         _board.CurrentPly > 0 ? GetAnalysisAt(_board.CurrentPly - 1) : null;
@@ -242,6 +267,8 @@
     {
         _board.Reset();
         _moveAnalyses.Clear();
+        _pgnMoveCount = 0;
+        _pgnUciMoves = [];
         ClearSelection();
     }
 
@@ -279,6 +306,8 @@
         try
         {
             _board.LoadFromPgn(game.Pgn);
+            _pgnUciMoves = _board.Moves.Select(m => m.Uci).ToList();
+            _pgnMoveCount = _pgnUciMoves.Count;
             _moveAnalyses.Clear();
             ClearSelection();
             _status = $"Партия загружена · {_board.MoveCount} ходов";
@@ -315,7 +344,11 @@
         if (_board.MoveCount == 0)
             return "Начальная позиция";
 
-        return $"Ход {_board.CurrentPly} / {_board.MoveCount}";
+        var label = $"Ход {_board.CurrentPly} / {_board.MoveCount}";
+        if (IsInVariation)
+            label += " · вариант";
+
+        return label;
     }
 
     private MoveAnalysis? GetAnalysisAt(int moveIndex)
@@ -370,6 +403,8 @@
             var from = _selectedSquare;
             ClearSelection();
 
+            TruncateAnalysesFrom(_board.CurrentPly);
+
             if (_board.TryMakeMove(from, square))
                 await AnalyzeLastMoveAsync();
         }
@@ -382,6 +417,12 @@
         {
             ClearSelection();
         }
+    }
+
+    private void TruncateAnalysesFrom(int ply)
+    {
+        while (_moveAnalyses.Count > ply)
+            _moveAnalyses.RemoveAt(_moveAnalyses.Count - 1);
     }
 
     private void ClearSelection()
@@ -470,6 +511,8 @@
             _result = await Analyzer.AnalyzeAsync(_selected, _fastOptions, progress);
 
             _board.LoadFromPgn(_selected.Pgn);
+            _pgnUciMoves = _board.Moves.Select(m => m.Uci).ToList();
+            _pgnMoveCount = _pgnUciMoves.Count;
             _moveAnalyses.Clear();
             _moveAnalyses.AddRange(_result.Moves.Cast<MoveAnalysis?>());
             _board.GoToPly(0);

@@ -17,9 +17,9 @@ public static class ChessBoardHelper
     {
         var file = square[0] - 'a';
         var rank = square[1] - '1';
-        var displayFile = flip ? 7 - file : file;
-        var displayRank = flip ? rank : 7 - rank;
-        return (displayFile * squareSize + squareSize / 2, displayRank * squareSize + squareSize / 2);
+        var col = flip ? 7 - file : file;
+        var row = flip ? rank : 7 - rank;
+        return (col * squareSize + squareSize / 2, row * squareSize + squareSize / 2);
     }
 
     public static IReadOnlyList<(char Piece, string Square)> ParseFen(string fen, bool flip)
@@ -29,8 +29,8 @@ public static class ChessBoardHelper
 
         for (var rankIndex = 0; rankIndex < 8; rankIndex++)
         {
-            var fenRank = flip ? rankIndex : 7 - rankIndex;
-            var displayRank = flip ? rankIndex : 7 - rankIndex;
+            var fenRank = flip ? 7 - rankIndex : rankIndex;
+            var nameRank = flip ? rankIndex : 7 - rankIndex;
             var fileIndex = 0;
 
             foreach (var ch in rows[fenRank])
@@ -41,14 +41,14 @@ public static class ChessBoardHelper
                     for (var i = 0; i < empty; i++)
                     {
                         var file = flip ? 7 - fileIndex : fileIndex;
-                        squares.Add(('.', SquareName(file, displayRank)));
+                        squares.Add(('.', SquareName(file, nameRank)));
                         fileIndex++;
                     }
                 }
                 else
                 {
                     var file = flip ? 7 - fileIndex : fileIndex;
-                    squares.Add((ch, SquareName(file, displayRank)));
+                    squares.Add((ch, SquareName(file, nameRank)));
                     fileIndex++;
                 }
             }
