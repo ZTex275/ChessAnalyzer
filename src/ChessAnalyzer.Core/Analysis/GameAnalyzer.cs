@@ -86,9 +86,9 @@ public sealed class GameAnalyzer(IStockfishEngine engine)
             var to = uci[2..4];
             char? promo = uci.Length > 4 ? uci[4] : null;
 
-            foreach (var move in game.GetValidMoves(false))
+            foreach (var move in game.GetValidMoves(game.CurrentPlayer))
             {
-                if (move.Origin.ToString() != from || move.Destination.ToString() != to)
+                if (move.OriginalPosition.ToString() != from || move.NewPosition.ToString() != to)
                     continue;
 
                 if (promo.HasValue && move.Promotion?.ToString()[0] != char.ToUpperInvariant(promo.Value))
@@ -96,8 +96,7 @@ public sealed class GameAnalyzer(IStockfishEngine engine)
 
                 var clone = new ChessGame(fen);
                 clone.MakeMove(move, true);
-                var last = clone.GetMoveHistory().Last();
-                return clone.WhoseMove == Player.Black ? last.SanForWhite : last.SanForBlack;
+                return clone.AllMoves.Last().SAN;
             }
         }
         catch

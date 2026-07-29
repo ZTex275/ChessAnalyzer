@@ -14,7 +14,7 @@ public static class PgnGameLoader
         foreach (var san in sanMoves)
         {
             var fenBefore = game.GetFen();
-            var isWhite = game.WhoseMove == Player.White;
+            var isWhite = game.CurrentPlayer == Player.White;
             var move = FindMoveBySan(game, san)
                 ?? throw new InvalidOperationException($"Недопустимый ход в PGN: {san}");
 
@@ -29,26 +29,11 @@ public static class PgnGameLoader
 
     private static Move? FindMoveBySan(ChessGame game, string san)
     {
-        foreach (var move in game.GetValidMoves(false))
+        foreach (var move in game.GetValidMoves(game.CurrentPlayer))
         {
             var clone = new ChessGame(game.GetFen());
             clone.MakeMove(move, true);
-            if (string.Equals(clone.WhoseMove == Player.White
-                    ? clone.GetMoveHistory().Last().SanForWhite
-                    : clone.GetMoveHistory().Last().SanForBlack,
-                san, StringComparison.Ordinal))
-                return move;
-        }
-
-        foreach (var move in game.GetValidMoves(false))
-        {
-            var test = new ChessGame(game.GetFen());
-            test.MakeMove(move, true);
-            var last = test.GetMoveHistory().LastOrDefault();
-            if (last is null)
-                continue;
-
-            var candidate = test.WhoseMove == Player.Black ? last.SanForWhite : last.SanForBlack;
+            var candidate = clone.AllMoves.Last().SAN;
             if (string.Equals(NormalizeSan(candidate), NormalizeSan(san), StringComparison.OrdinalIgnoreCase))
                 return move;
         }
@@ -61,9 +46,9 @@ public static class PgnGameLoader
 
     private static string ToUci(Move move)
     {
-        var uci = $"{move.Origin}{move.Destination}";
+        var uci = $"{move.OriginalPosition}{move.NewPosition}";
         if (move.Promotion != null)
-            uci += char.ToLowerInvariant(move.Promotion.Value.ToString()[0]);
+            uci += char.ToLowerInvariant(move.Promotion.Value);
         return uci;
     }
 
