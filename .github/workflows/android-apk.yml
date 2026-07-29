@@ -55,14 +55,10 @@ jobs:
           cp /tmp/stockfish/stockfish-android-armv8 src/ChessAnalyzer.Maui/engines/stockfish
           chmod +x src/ChessAnalyzer.Maui/engines/stockfish
 
-      - name: Create signing keystore
+      - name: Verify signing keystore
         run: |
-          keytool -genkeypair -v \
-            -keystore chessanalyzer.keystore \
-            -alias chessanalyzer \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass android -keypass android \
-            -dname "CN=ChessAnalyzer, OU=Mobile, O=ChessAnalyzer, L=Unknown, ST=Unknown, C=US"
+          test -f android/chessanalyzer.keystore
+          keytool -list -v -keystore android/chessanalyzer.keystore -storepass chessanalyzer -alias chessanalyzer | head -20
 
       - name: Build Release APK
         run: |
@@ -73,10 +69,10 @@ jobs:
             -p:AndroidPackageFormat=apk \
             -p:AndroidSdkDirectory="$ANDROID_HOME" \
             -p:AndroidKeyStore=true \
-            -p:AndroidSigningKeyStore="$PWD/chessanalyzer.keystore" \
+            -p:AndroidSigningKeyStore="$PWD/android/chessanalyzer.keystore" \
             -p:AndroidSigningKeyAlias=chessanalyzer \
-            -p:AndroidSigningStorePass=android \
-            -p:AndroidSigningKeyPass=android
+            -p:AndroidSigningStorePass=chessanalyzer \
+            -p:AndroidSigningKeyPass=chessanalyzer
 
       - name: Collect APK
         run: |
@@ -86,19 +82,19 @@ jobs:
             echo "Signed APK not found"
             exit 1
           fi
-          cp "$APK" ChessAnalyzer-1.0.1.apk
-          jarsigner -verify ChessAnalyzer-1.0.1.apk
-          ls -la ChessAnalyzer-1.0.1.apk
+          cp "$APK" ChessAnalyzer-1.0.2.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose ChessAnalyzer-1.0.2.apk
+          ls -la ChessAnalyzer-1.0.2.apk
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: ChessAnalyzer-1.0.1.apk
+          path: ChessAnalyzer-1.0.2.apk
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ChessAnalyzer-1.0.1.apk
+          files: ChessAnalyzer-1.0.2.apk
           generate_release_notes: true
