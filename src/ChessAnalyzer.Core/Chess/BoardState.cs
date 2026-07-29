@@ -5,28 +5,44 @@ namespace ChessAnalyzer.Core.Chess;
 
 public sealed class BoardState
 {
-    private readonly List<string> _fens =
+    private readonly List<string> _mainFens =
     [
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        StartFen
     ];
 
-    private readonly List<(string San, string Uci, bool IsWhite)> _moves = [];
+    private readonly List<(string San, string Uci, bool IsWhite)> _mainMoves = [];
+    private readonly List<string> _varFens = [];
+    private readonly List<(string San, string Uci, bool IsWhite)> _varMoves = [];
+    private int _branchPly = -1;
     private int _ply;
 
     public const string StartFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-    public string CurrentFen => _fens[_ply];
+    public string CurrentFen => GetFenAt(_ply);
     public int CurrentPly => _ply;
-    public int MoveCount => _moves.Count;
+    public int MainMoveCount => _mainMoves.Count;
+    public int MoveCount => IsInVariation && _ply > _branchPly
+        ? _branchPly + _varMoves.Count
+        : _mainMoves.Count;
+    public bool IsInVariation => _branchPly >= 0;
+    public int BranchPly => _branchPly;
+    public bool IsOnMainLine => !IsInVariation || _ply <= _branchPly;
+
     public bool CanStepBack => _ply > 0;
-    public bool CanStepForward => _ply < _moves.Count;
-    public IReadOnlyList<(string San, string Uci, bool IsWhite)> Moves => _moves;
+
+    public bool CanStepForward =>
+        IsInVariation && _ply > _branchPly
+            ? _ply < _branchPly + _varMoves.Count
+            : _ply < _mainMoves.Count;
+
+    public IReadOnlyList<(string San, string Uci, bool IsWhite)> Moves => GetCurrentMoves();
 
     public void Reset()
     {
-        _fens.Clear();
-        _fens.Add(StartFen);
-        _moves.Clear();
+        _mainFens.Clear();
+        _mainFens.Add(StartFen);
+        _mainMoves.Clear();
+        ClearVariation();
         _ply = 0;
     }
 
@@ -35,57 +51,96 @@ public sealed class BoardState
         Reset();
         foreach (var (san, uci, _, fenAfter, isWhite) in PgnGameLoader.LoadMoves(pgn))
         {
-            _moves.Add((san, uci, isWhite));
-            _fens.Add(fenAfter);
+            _mainMoves.Add((san, uci, isWhite));
+            _mainFens.Add(fenAfter);
         }
     }
 
-    public string GetFenAt(int ply) => _fens[ply];
+    public string GetFenAt(int ply)
+    {
+        if (ply < 0)
+            throw new ArgumentOutOfRangeException(nameof(ply));
+
+        if (!IsInVariation || ply <= _branchPly)
+            return _mainFens[ply];
+
+        var varIndex = ply - _branchPly;
+        return _varFens[varIndex];
+    }
 
     public (string San, string Uci, bool IsWhite)? GetMoveAt(int moveIndex)
     {
-        if (moveIndex < 0 || moveIndex >= _moves.Count)
+        if (moveIndex < 0)
             return null;
 
-        return _moves[moveIndex];
+        if (!IsInVariation || moveIndex < _branchPly)
+        {
+            if (moveIndex >= _mainMoves.Count)
+                return null;
+
+            return _mainMoves[moveIndex];
+        }
+
+        var varIndex = moveIndex - _branchPly;
+        if (varIndex >= _varMoves.Count)
+            return null;
+
+        return _varMoves[varIndex];
     }
 
     public bool TryMakeMove(string fromSquare, string toSquare, char? promotion = null)
     {
-        TruncateAfterCurrentPly();
+        if (!IsInVariation && _ply < _mainMoves.Count)
+        {
+            var game = new ChessGame(CurrentFen);
+            var move = FindMove(game, fromSquare, toSquare, promotion)
+                ?? FindMove(game, fromSquare, toSquare, 'q');
+            if (move is null)
+                return false;
 
-        var game = new ChessGame(CurrentFen);
-        var move = FindMove(game, fromSquare, toSquare, promotion)
-            ?? FindMove(game, fromSquare, toSquare, 'q');
-        if (move is null)
-            return false;
+            var uci = ToUci(move);
+            var mainMove = _mainMoves[_ply];
+            if (string.Equals(uci, mainMove.Uci, StringComparison.OrdinalIgnoreCase))
+            {
+                _ply++;
+                return true;
+            }
 
-        var isWhite = game.CurrentPlayer == Player.White;
-        game.MakeMove(move, true);
-        var san = game.AllMoves.Last().SAN;
-        var uci = ToUci(move);
+            return TryStartVariation(fromSquare, toSquare, promotion);
+        }
 
-        _moves.Add((san, uci, isWhite));
-        _fens.Add(game.GetFen());
-        _ply = _moves.Count;
-        return true;
+        if (IsInVariation && _ply > _branchPly)
+            TruncateVariationAfterCurrentPly();
+
+        return TryStartVariation(fromSquare, toSquare, promotion);
     }
 
     public void StepBack()
     {
-        if (_ply > 0)
-            _ply--;
+        if (_ply <= 0)
+            return;
+
+        _ply--;
+
+        if (IsInVariation && _ply < _branchPly)
+            ClearVariation();
     }
 
     public void StepForward()
     {
-        if (_ply < _moves.Count)
-            _ply++;
+        if (!CanStepForward)
+            return;
+
+        if (IsInVariation && _ply == _branchPly)
+            ClearVariation();
+
+        _ply++;
     }
 
     public void GoToPly(int ply)
     {
-        _ply = Math.Clamp(ply, 0, _moves.Count);
+        ClearVariation();
+        _ply = Math.Clamp(ply, 0, _mainMoves.Count);
     }
 
     public IReadOnlyList<string> GetLegalTargetSquares(string fromSquare)
@@ -124,6 +179,66 @@ public sealed class BoardState
         }
     }
 
+    private bool TryStartVariation(string fromSquare, string toSquare, char? promotion)
+    {
+        var game = new ChessGame(CurrentFen);
+        var move = FindMove(game, fromSquare, toSquare, promotion)
+            ?? FindMove(game, fromSquare, toSquare, 'q');
+        if (move is null)
+            return false;
+
+        if (!IsInVariation || _ply <= _branchPly)
+        {
+            _branchPly = _ply;
+            _varFens.Clear();
+            _varMoves.Clear();
+            _varFens.Add(_mainFens[_branchPly]);
+        }
+        else
+        {
+            TruncateVariationAfterCurrentPly();
+        }
+
+        var isWhite = game.CurrentPlayer == Player.White;
+        game.MakeMove(move, true);
+        var san = game.AllMoves.Last().SAN;
+        var uci = ToUci(move);
+
+        _varMoves.Add((san, uci, isWhite));
+        _varFens.Add(game.GetFen());
+        _ply = _branchPly + _varMoves.Count;
+        return true;
+    }
+
+    private IReadOnlyList<(string San, string Uci, bool IsWhite)> GetCurrentMoves()
+    {
+        if (!IsInVariation || _ply <= _branchPly)
+            return _mainMoves;
+
+        var combined = new List<(string San, string Uci, bool IsWhite)>(_branchPly + _varMoves.Count);
+        for (var i = 0; i < _branchPly; i++)
+            combined.Add(_mainMoves[i]);
+
+        combined.AddRange(_varMoves);
+        return combined;
+    }
+
+    private void ClearVariation()
+    {
+        _branchPly = -1;
+        _varFens.Clear();
+        _varMoves.Clear();
+    }
+
+    private void TruncateVariationAfterCurrentPly()
+    {
+        while (_branchPly + _varMoves.Count > _ply)
+        {
+            _varMoves.RemoveAt(_varMoves.Count - 1);
+            _varFens.RemoveAt(_varFens.Count - 1);
+        }
+    }
+
     private static char? GetPieceAtSquare(string fen, string square)
     {
         var file = square[0] - 'a';
@@ -153,15 +268,6 @@ public sealed class BoardState
         }
 
         return null;
-    }
-
-    private void TruncateAfterCurrentPly()
-    {
-        while (_moves.Count > _ply)
-        {
-            _moves.RemoveAt(_moves.Count - 1);
-            _fens.RemoveAt(_fens.Count - 1);
-        }
     }
 
     private static Move? FindMove(ChessGame game, string fromSquare, string toSquare, char? promotion)

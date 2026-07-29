@@ -21,6 +21,7 @@
                         LegalTargets="@_legalTargets"
                         PlayedUci="@CurrentPlayedUci"
                         BestUci="@CurrentBestUci"
+                        LastMoveClassification="@CurrentMoveAnalysis?.Classification"
                         ShowLegend="@(CurrentMoveAnalysis is not null || !string.IsNullOrEmpty(CurrentBestUci))"
                         OnSquareClick="HandleSquareClick" />
 
@@ -29,6 +30,13 @@
                 <span class="ply-indicator">@GetPlyLabel()</span>
                 <button @onclick="StepForward" disabled="@(!_board.CanStepForward || _analyzing)">Вперёд →</button>
             </div>
+
+            @if (IsInVariation)
+            {
+                <button class="btn-return-main" @onclick="ReturnToMainLine" disabled="@_analyzing">
+                    Вернуться в партию
+                </button>
+            }
 
             @if (_analyzingMove || _analyzing)
             {
@@ -218,32 +226,17 @@
         _selected is not null
         && string.Equals(_selected.Black, _username.Trim(), StringComparison.OrdinalIgnoreCase);
 
-    private bool IsInVariation
-    {
-        get
-        {
-            if (_pgnMoveCount == 0)
-                return false;
-
-            if (_board.MoveCount != _pgnMoveCount)
-                return true;
-
-            for (var i = 0; i < _board.MoveCount; i++)
-            {
-                if (!string.Equals(_board.Moves[i].Uci, _pgnUciMoves[i], StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-
-            return false;
-        }
-    }
+    private bool IsInVariation =>
+        _board.IsInVariation && _board.CurrentPly > _board.BranchPly;
 
     private bool CanInteract => !_analyzing;
 
     private bool BoardFlipped => UserIsBlackInSelectedGame;
 
     private MoveAnalysis? CurrentMoveAnalysis =>
-        _board.CurrentPly > 0 ? GetAnalysisAt(_board.CurrentPly - 1) : null;
+        IsInVariation || _board.CurrentPly == 0
+            ? null
+            : GetAnalysisAt(_board.CurrentPly - 1);
 
     private string? CurrentPlayedUci =>
         CurrentMoveAnalysis?.Uci;
@@ -367,11 +360,11 @@
         try
         {
             _board.LoadFromPgn(game.Pgn);
-            _pgnUciMoves = _board.Moves.Select(m => m.Uci).ToList();
+            _pgnUciMoves = _board.Moves.Take(_board.MainMoveCount).Select(m => m.Uci).ToList();
             _pgnMoveCount = _pgnUciMoves.Count;
             _moveAnalyses.Clear();
             ClearSelection();
-            _status = $"Партия загружена · {_board.MoveCount} ходов";
+            _status = $"Партия загружена · {_board.MainMoveCount} ходов";
             _ = RefreshPositionBestAsync();
         }
         catch (Exception ex)
@@ -404,14 +397,24 @@
         _ = RefreshPositionBestAsync();
     }
 
+    private void ReturnToMainLine()
+    {
+        if (!_board.IsInVariation)
+            return;
+
+        _board.GoToPly(_board.BranchPly);
+        ClearSelection();
+        _ = RefreshPositionBestAsync();
+    }
+
     private string GetPlyLabel()
     {
-        if (_board.MoveCount == 0)
+        if (_board.MainMoveCount == 0)
             return "Начальная позиция";
 
-        var label = $"Ход {_board.CurrentPly} / {_board.MoveCount}";
-        if (IsInVariation)
-            label += " · вариант";
+        var label = IsInVariation
+            ? $"Вариант · партия {_board.CurrentPly}/{_board.MainMoveCount}"
+            : $"Ход {_board.CurrentPly} / {_board.MainMoveCount}";
 
         return label;
     }
@@ -468,10 +471,13 @@
             var from = _selectedSquare;
             ClearSelection();
 
-            TruncateAnalysesFrom(_board.CurrentPly);
-
             if (_board.TryMakeMove(from, square))
-                await AnalyzeLastMoveAsync();
+            {
+                if (_board.IsOnMainLine)
+                    await AnalyzeLastMoveAsync();
+                else
+                    _ = RefreshPositionBestAsync();
+            }
         }
         else if (_board.IsOwnPiece(square))
         {
@@ -482,12 +488,6 @@
         {
             ClearSelection();
         }
-    }
-
-    private void TruncateAnalysesFrom(int ply)
-    {
-        while (_moveAnalyses.Count > ply)
-            _moveAnalyses.RemoveAt(_moveAnalyses.Count - 1);
     }
 
     private void ClearSelection()
@@ -592,7 +592,7 @@
             await InvokeAsync(StateHasChanged);
 
             _board.LoadFromPgn(_selected.Pgn);
-            _pgnUciMoves = _board.Moves.Select(m => m.Uci).ToList();
+            _pgnUciMoves = _board.Moves.Take(_board.MainMoveCount).Select(m => m.Uci).ToList();
             _pgnMoveCount = _pgnUciMoves.Count;
             _moveAnalyses.Clear();
             _moveAnalyses.AddRange(_result.Moves.Cast<MoveAnalysis?>());

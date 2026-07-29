@@ -1,5 +1,6 @@
 @using ChessAnalyzer.Web.Components
 @using ChessAnalyzer.Core.Chess
+@using ChessAnalyzer.Core.Models
 
 <div class="board-wrap">
     <div class="board-with-coords">
@@ -43,6 +44,13 @@
                                  alt=""
                                  draggable="false" />
                         }
+                        @if (ShowMoveBadge && PlayedTo == sq.Square && LastMoveClassification is { } badgeClass)
+                        {
+                            <span class="piece-class-badge @badgeClass.ToCssClass()"
+                                  title="@badgeClass.ToDisplayName()">
+                                @badgeClass.ToIcon()
+                            </span>
+                        }
                     </div>
                 }
 
@@ -84,6 +92,7 @@
     [Parameter] public bool Flip { get; set; }
     [Parameter] public string? PlayedUci { get; set; }
     [Parameter] public string? BestUci { get; set; }
+    [Parameter] public MoveClassification? LastMoveClassification { get; set; }
     [Parameter] public bool Interactive { get; set; }
     [Parameter] public string? SelectedSquare { get; set; }
     [Parameter] public IReadOnlyList<string> LegalTargets { get; set; } = [];
@@ -101,6 +110,9 @@
         BestFrom is not null
         && BestTo is not null
         && !string.Equals(PlayedUci, BestUci, StringComparison.OrdinalIgnoreCase);
+
+    private bool ShowMoveBadge =>
+        LastMoveClassification is { } c && c.HasIcon() && PlayedTo is not null;
 
     protected override void OnParametersSet()
     {

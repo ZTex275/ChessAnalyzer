@@ -248,6 +248,13 @@ button:disabled {
     color: #fff;
 }
 
+.btn-return-main {
+    width: 100%;
+    background: #444;
+    color: var(--text);
+    margin-top: 4px;
+}
+
 .picker-section {
     margin-top: 20px;
 }
@@ -371,6 +378,63 @@ button:disabled {
     user-select: none;
     pointer-events: none;
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+.piece-class-badge {
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: calc(var(--sq) * 0.38);
+    height: calc(var(--sq) * 0.38);
+    padding: 0 2px;
+    border-radius: 50%;
+    font-size: clamp(8px, calc(var(--sq) * 0.22), 14px);
+    font-weight: 900;
+    line-height: 1;
+    pointer-events: none;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    border: 2px solid rgba(255, 255, 255, 0.85);
+}
+
+.piece-class-badge.badge-brilliant {
+    background: #1BAAA6;
+    color: #fff;
+}
+
+.piece-class-badge.badge-best {
+    background: #26C281;
+    color: #fff;
+}
+
+.piece-class-badge.badge-excellent {
+    background: #96BC4B;
+    color: #fff;
+}
+
+.piece-class-badge.badge-book {
+    background: #A88865;
+    color: #fff;
+    font-size: clamp(7px, calc(var(--sq) * 0.18), 11px);
+}
+
+.piece-class-badge.badge-inaccuracy {
+    background: #F0C15D;
+    color: #3a2e00;
+}
+
+.piece-class-badge.badge-mistake {
+    background: #E58F2A;
+    color: #fff;
+}
+
+.piece-class-badge.badge-blunder,
+.piece-class-badge.badge-miss {
+    background: #CA3431;
+    color: #fff;
 }
 
 .square.selected.light { background: #baca44; }
