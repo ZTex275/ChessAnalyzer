@@ -42,7 +42,8 @@
                         classes += " best-to";
 
                     <div class="@classes"
-                         data-square="@sq.Square">
+                         data-square="@sq.Square"
+                         @onclick="() => HandleSquareClick(sq.Square)">
                         @if (sq.Piece != '.')
                         {
                             <img class="piece-img"
@@ -181,12 +182,6 @@
             return;
 
         await OnPieceDrop.InvokeAsync((from, to));
-    }
-
-    [JSInvokable]
-    public async Task HandleTapJs(string square)
-    {
-        await HandleSquareClick(square);
     }
 
     public async ValueTask DisposeAsync()

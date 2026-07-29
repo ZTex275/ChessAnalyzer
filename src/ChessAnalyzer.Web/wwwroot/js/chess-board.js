@@ -1,6 +1,7 @@
 let boardEl = null;
 let dotNetRef = null;
 let dragState = null;
+let suppressClick = false;
 
 const DRAG_THRESHOLD = 8;
 
@@ -9,6 +10,7 @@ export function init(element, dotnet) {
     boardEl = element;
     dotNetRef = dotnet;
     boardEl.addEventListener('pointerdown', onPointerDown);
+    boardEl.addEventListener('click', onClickCapture, true);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerCancel);
@@ -17,6 +19,7 @@ export function init(element, dotnet) {
 export function dispose() {
     if (boardEl) {
         boardEl.removeEventListener('pointerdown', onPointerDown);
+        boardEl.removeEventListener('click', onClickCapture, true);
     }
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);
@@ -24,6 +27,17 @@ export function dispose() {
     cleanupDrag();
     boardEl = null;
     dotNetRef = null;
+    suppressClick = false;
+}
+
+function onClickCapture(e) {
+    if (!suppressClick) {
+        return;
+    }
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    suppressClick = false;
 }
 
 function getSquareElement(target) {
@@ -50,10 +64,12 @@ function onPointerDown(e) {
     dragState = {
         pointerId: e.pointerId,
         square,
-        hasPiece: !!pieceImg,
+        squareEl,
+        pieceImg,
         canDrag: false,
         legalTargets: new Set(),
         moved: false,
+        dragging: false,
         startX: e.clientX,
         startY: e.clientY,
         ghost: null
@@ -72,18 +88,6 @@ function onPointerDown(e) {
 
                 dragState.canDrag = true;
                 dragState.legalTargets = new Set(result.legalTargets ?? []);
-                updateLegalHighlights();
-
-                const img = pieceImg.cloneNode(true);
-                img.classList.add('piece-drag-ghost');
-                img.style.width = `${pieceImg.offsetWidth}px`;
-                img.style.height = `${pieceImg.offsetHeight}px`;
-                document.body.appendChild(img);
-                dragState.ghost = img;
-                positionGhost(e.clientX, e.clientY);
-
-                squareEl.classList.add('drag-source');
-                boardEl.setPointerCapture(e.pointerId);
             })
             .catch(() => cleanupDrag());
     }
@@ -103,15 +107,32 @@ function onPointerMove(e) {
         }
 
         dragState.moved = true;
-        if (dragState.canDrag) {
-            e.preventDefault();
+
+        if (!dragState.canDrag || !dragState.pieceImg) {
+            return;
         }
+
+        dragState.dragging = true;
+        e.preventDefault();
+
+        const img = dragState.pieceImg.cloneNode(true);
+        img.classList.add('piece-drag-ghost');
+        img.style.width = `${dragState.pieceImg.offsetWidth}px`;
+        img.style.height = `${dragState.pieceImg.offsetHeight}px`;
+        document.body.appendChild(img);
+        dragState.ghost = img;
+        positionGhost(e.clientX, e.clientY);
+
+        dragState.squareEl.classList.add('drag-source');
+        updateLegalHighlights();
+        boardEl.setPointerCapture(e.pointerId);
     }
 
-    if (!dragState.canDrag || !dragState.ghost) {
+    if (!dragState.dragging || !dragState.ghost) {
         return;
     }
 
+    e.preventDefault();
     positionGhost(e.clientX, e.clientY);
     updateHoverSquare(getSquareName(document.elementFromPoint(e.clientX, e.clientY)));
 }
@@ -138,7 +159,7 @@ function finishDrag(targetSquare) {
         return;
     }
 
-    const { square, moved, canDrag } = dragState;
+    const { square, dragging } = dragState;
 
     try {
         boardEl?.releasePointerCapture?.(dragState.pointerId);
@@ -148,12 +169,10 @@ function finishDrag(targetSquare) {
 
     cleanupDrag();
 
-    if (moved && canDrag && targetSquare) {
+    if (dragging && targetSquare) {
+        suppressClick = true;
         dotNetRef.invokeMethodAsync('HandleDropJs', square, targetSquare);
-        return;
     }
-
-    dotNetRef.invokeMethodAsync('HandleTapJs', targetSquare ?? square);
 }
 
 function positionGhost(x, y) {

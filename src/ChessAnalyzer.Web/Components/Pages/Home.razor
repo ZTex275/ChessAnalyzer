@@ -40,7 +40,7 @@
                 </button>
             }
 
-            @if (_analyzingMove || _analyzing)
+            @if (_analyzing || _backgroundAnalyzing)
             {
                 <div class="progress-wrap">
                     <div class="progress-bar" style="width: @(_progressPercent)%"></div>
@@ -124,7 +124,7 @@
             <div class="analysis-panel">
                 <h2>@_selected.White vs @_selected.Black</h2>
                 <div class="analysis-actions">
-                    <button @onclick="AnalyzeGameAsync" disabled="@(_analyzing || _analyzingMove)">Анализировать партию</button>
+                    <button @onclick="AnalyzeGameAsync" disabled="@(_analyzing || _backgroundAnalyzing)">Анализировать партию</button>
                     <button class="btn-stop" @onclick="StopAnalysis" disabled="@(!_analyzing)">Остановить</button>
                 </div>
 
@@ -205,12 +205,13 @@
     private readonly BoardState _board = new();
     private readonly List<MoveAnalysis?> _moveAnalyses = [];
     private readonly AnalysisOptions _fastOptions = new() { Depth = 12, FastMode = true, Threads = 1, HashMb = 16 };
+    private readonly SemaphoreSlim _analysisLock = new(1, 1);
 
     private string _username = "";
     private string _status = "";
     private bool _loading;
     private bool _analyzing;
-    private bool _analyzingMove;
+    private bool _backgroundAnalyzing;
     private string _progress = "";
     private int _progressPercent;
     private List<ChessComGameSummary> _allGames = [];
@@ -224,9 +225,10 @@
     private List<string> _pgnUciMoves = [];
     private List<(string San, string Uci, bool IsWhite)> _pgnMoves = [];
 
-    private CancellationTokenSource? _moveAnalysisCts;
     private CancellationTokenSource? _gameAnalysisCts;
+    private CancellationTokenSource? _backgroundAnalysisCts;
     private CancellationTokenSource? _positionAnalysisCts;
+    private EvalCache? _backgroundEvalCache;
     private string? _positionBestUci;
     private string? _positionBestSan;
     private string _lastPositionFen = "";
@@ -342,6 +344,7 @@
 
     private void ResetBoard()
     {
+        StopBackgroundAnalysis();
         _board.Reset();
         _moveAnalyses.Clear();
         _pgnMoveCount = 0;
@@ -380,6 +383,7 @@
 
     private void SelectGame(ChessComGameSummary game)
     {
+        StopBackgroundAnalysis();
         _selected = game;
         _result = null;
         _progress = "";
@@ -396,6 +400,7 @@
             _board.GoToPly(0);
             _status = $"Партия загружена · {_board.MainMoveCount} ходов";
             _ = RefreshPositionBestAsync();
+            _ = AnalyzeAllMovesBackgroundAsync();
         }
         catch (Exception ex)
         {
@@ -406,8 +411,6 @@
 
     private void StepBack()
     {
-        _moveAnalysisCts?.Cancel();
-        _analyzingMove = false;
         _board.StepBack();
         ClearSelection();
         _ = RefreshPositionBestAsync();
@@ -539,13 +542,10 @@
         if (!CanInteract || !_board.IsOwnPiece(square))
             return Task.FromResult<ChessBoard.DragStartInfo?>(null);
 
-        _selectedSquare = square;
-        _legalTargets = _board.GetLegalTargetSquares(square);
-
         return Task.FromResult<ChessBoard.DragStartInfo?>(new ChessBoard.DragStartInfo
         {
             CanDrag = true,
-            LegalTargets = _legalTargets.ToArray()
+            LegalTargets = _board.GetLegalTargetSquares(square).ToArray()
         });
     }
 
@@ -605,55 +605,65 @@
 
     private async Task EnsureVisibleMoveAnalyzedAsync()
     {
-        if (_board.CurrentPly == 0 || !_board.IsOnMainLine || _analyzing)
+        if (_board.CurrentPly == 0 || !_board.IsOnMainLine || _analyzing || _result is not null)
             return;
 
-        await AnalyzeMoveAtAsync(_board.CurrentPly - 1);
+        var moveIndex = _board.CurrentPly - 1;
+        if (GetAnalysisAt(moveIndex) is not null)
+            return;
+
+        var ct = _backgroundAnalysisCts?.Token ?? CancellationToken.None;
+        await AnalyzeMoveAtInternalAsync(moveIndex, ct);
+        await InvokeAsync(StateHasChanged);
     }
 
-    private async Task AnalyzeMoveAtAsync(int moveIndex)
+    private void StopBackgroundAnalysis()
     {
-        if (moveIndex < 0 || GetAnalysisAt(moveIndex) is not null)
+        _backgroundAnalysisCts?.Cancel();
+        _backgroundAnalysisCts?.Dispose();
+        _backgroundAnalysisCts = null;
+        _backgroundEvalCache = null;
+        _backgroundAnalyzing = false;
+    }
+
+    private async Task AnalyzeAllMovesBackgroundAsync()
+    {
+        if (_pgnMoveCount == 0 || _result is not null)
             return;
 
-        _moveAnalysisCts?.Cancel();
-        _moveAnalysisCts = new CancellationTokenSource();
-        var ct = _moveAnalysisCts.Token;
-
-        var move = GetMainLineMoveAt(moveIndex);
-        if (move is null)
-            return;
-
-        while (_moveAnalyses.Count <= moveIndex)
-            _moveAnalyses.Add(null);
-
-        _analyzingMove = true;
-        _progress = $"Анализ хода: {move.Value.San}";
+        StopBackgroundAnalysis();
+        _backgroundAnalysisCts = new CancellationTokenSource();
+        var ct = _backgroundAnalysisCts.Token;
+        _backgroundEvalCache = new EvalCache();
+        _backgroundAnalyzing = true;
+        _progress = "Разметка ходов...";
         _progressPercent = 0;
 
         try
         {
-            var analysis = await Analyzer.AnalyzeSingleMoveAsync(
-                move.Value.San,
-                move.Value.Uci,
-                _board.GetFenAt(moveIndex),
-                _board.GetFenAt(moveIndex + 1),
-                move.Value.IsWhite,
-                moveIndex,
-                _fastOptions,
-                ct: ct);
-
-            if (!ct.IsCancellationRequested)
+            var analyzed = CountAnalyzedMoves();
+            for (var i = 0; i < _pgnMoveCount; i++)
             {
-                _moveAnalyses[moveIndex] = analysis;
-                _progress = "";
-                _progressPercent = 0;
+                ct.ThrowIfCancellationRequested();
+
+                if (GetAnalysisAt(i) is not null)
+                    continue;
+
+                await AnalyzeMoveAtInternalAsync(i, ct);
+
+                analyzed++;
+                _progressPercent = Math.Min(99, (int)Math.Round(analyzed * 100.0 / _pgnMoveCount));
+                _progress = $"Разметка ходов {analyzed}/{_pgnMoveCount}";
                 await InvokeAsync(StateHasChanged);
-                _ = RefreshPositionBestAsync();
             }
+
+            _progress = "";
+            _progressPercent = 0;
         }
         catch (OperationCanceledException)
         {
+            _progress = "";
+            _progressPercent = 0;
         }
         catch (Exception ex)
         {
@@ -662,8 +672,60 @@
         }
         finally
         {
+            _backgroundAnalyzing = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private int CountAnalyzedMoves()
+    {
+        var count = 0;
+        for (var i = 0; i < _pgnMoveCount; i++)
+        {
+            if (GetAnalysisAt(i) is not null)
+                count++;
+        }
+
+        return count;
+    }
+
+    private async Task AnalyzeMoveAtInternalAsync(int moveIndex, CancellationToken ct)
+    {
+        if (moveIndex < 0 || GetAnalysisAt(moveIndex) is not null)
+            return;
+
+        var move = GetMainLineMoveAt(moveIndex);
+        if (move is null)
+            return;
+
+        await _analysisLock.WaitAsync(ct);
+        try
+        {
+            if (GetAnalysisAt(moveIndex) is not null)
+                return;
+
+            while (_moveAnalyses.Count <= moveIndex)
+                _moveAnalyses.Add(null);
+
+            _backgroundEvalCache ??= new EvalCache();
+
+            var analysis = await Analyzer.AnalyzeSingleMoveAsync(
+                move.Value.San,
+                move.Value.Uci,
+                _board.GetFenAt(moveIndex),
+                _board.GetFenAt(moveIndex + 1),
+                move.Value.IsWhite,
+                moveIndex,
+                _fastOptions,
+                _backgroundEvalCache,
+                ct);
+
             if (!ct.IsCancellationRequested)
-                _analyzingMove = false;
+                _moveAnalyses[moveIndex] = analysis;
+        }
+        finally
+        {
+            _analysisLock.Release();
         }
     }
 
@@ -677,6 +739,7 @@
         if (_selected is null)
             return;
 
+        StopBackgroundAnalysis();
         _gameAnalysisCts?.Cancel();
         _gameAnalysisCts?.Dispose();
         _gameAnalysisCts = new CancellationTokenSource();
@@ -818,8 +881,7 @@
 
     public void Dispose()
     {
-        _moveAnalysisCts?.Cancel();
-        _moveAnalysisCts?.Dispose();
+        StopBackgroundAnalysis();
         _gameAnalysisCts?.Cancel();
         _gameAnalysisCts?.Dispose();
         _positionAnalysisCts?.Cancel();
