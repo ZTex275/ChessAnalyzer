@@ -42,4 +42,34 @@ public static class MoveClassificationExtensions
         MoveClassification.Brilliant => "#1BAAA6",
         _ => "#888888"
     };
+
+    public static string ToIcon(this MoveClassification c) => c switch
+    {
+        MoveClassification.Brilliant => "!!",
+        MoveClassification.Best => "✓",
+        MoveClassification.Excellent => "!",
+        MoveClassification.Book => "▤",
+        MoveClassification.Inaccuracy => "?!",
+        MoveClassification.Mistake => "?",
+        MoveClassification.Blunder => "??",
+        MoveClassification.Miss => "✗",
+        _ => ""
+    };
+
+    public static string ToCssClass(this MoveClassification c) => c switch
+    {
+        MoveClassification.Brilliant => "badge-brilliant",
+        MoveClassification.Best => "badge-best",
+        MoveClassification.Excellent => "badge-excellent",
+        MoveClassification.Good => "badge-good",
+        MoveClassification.Book => "badge-book",
+        MoveClassification.Inaccuracy => "badge-inaccuracy",
+        MoveClassification.Mistake => "badge-mistake",
+        MoveClassification.Blunder => "badge-blunder",
+        MoveClassification.Miss => "badge-miss",
+        _ => "badge-good"
+    };
+
+    public static bool HasIcon(this MoveClassification c) =>
+        c is not MoveClassification.Good;
 }

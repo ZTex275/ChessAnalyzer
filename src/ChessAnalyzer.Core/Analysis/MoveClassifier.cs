@@ -7,13 +7,23 @@ public static class MoveClassifier
     public static MoveClassification Classify(
         int centipawnLoss,
         bool playedBestMove,
+        int evalBeforeCp,
+        int evalAfterCp,
         bool isBookMove = false)
     {
         if (isBookMove)
             return MoveClassification.Book;
 
         if (playedBestMove)
+        {
+            if (centipawnLoss == 0 && evalAfterCp - evalBeforeCp >= 250)
+                return MoveClassification.Brilliant;
+
             return MoveClassification.Best;
+        }
+
+        if (evalBeforeCp >= 500 && evalAfterCp < 200 && centipawnLoss >= 80)
+            return MoveClassification.Miss;
 
         return centipawnLoss switch
         {

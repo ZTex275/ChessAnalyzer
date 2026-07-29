@@ -48,9 +48,13 @@
                     <div class="move-header">
                         Ход @CurrentMoveAnalysis.MoveNumber@(CurrentMoveAnalysis.IsWhiteMove ? "." : "...") @CurrentMoveAnalysis.San
                     </div>
-                    <strong class="@GetClassCss(CurrentMoveAnalysis.Classification)">
+                    <span class="move-classification @CurrentMoveAnalysis.Classification.ToCssClass()">
+                        @if (CurrentMoveAnalysis.Classification.HasIcon())
+                        {
+                            <span class="move-badge">@CurrentMoveAnalysis.Classification.ToIcon()</span>
+                        }
                         @CurrentMoveAnalysis.Classification.ToDisplayName()
-                    </strong>
+                    </span>
                     @if (!string.Equals(CurrentMoveAnalysis.Uci, CurrentMoveAnalysis.EvalBefore.BestMove, StringComparison.OrdinalIgnoreCase))
                     {
                         <div class="best-move">Лучший был: @CurrentMoveAnalysis.BestMoveSan</div>
@@ -127,6 +131,19 @@
                         </div>
                     </div>
 
+                    <div class="classification-summary">
+                        @foreach (var item in GetClassificationSummary())
+                        {
+                            <span class="summary-chip @item.Classification.ToCssClass()" title="@item.Classification.ToDisplayName()">
+                                @if (item.Classification.HasIcon())
+                                {
+                                    <span class="move-badge">@item.Classification.ToIcon()</span>
+                                }
+                                @item.Count
+                            </span>
+                        }
+                    </div>
+
                     <div class="move-list">
                         @foreach (var row in GetMoveRows())
                         {
@@ -134,18 +151,24 @@
                                 <span class="move-num">@row.Number.</span>
                                 @if (row.White is not null)
                                 {
-                                    <button class="move-btn @ChipClass(row.White.PlyIndex + 1)"
-                                            style="border-bottom: 3px solid @row.White.Classification.ToColorHex()"
+                                    <button class="move-btn @ChipClass(row.White.PlyIndex + 1) @row.White.Classification.ToCssClass()"
                                             @onclick="() => GoToMove(row.White!.PlyIndex + 1)">
-                                        @row.White.San
+                                        <span class="move-san">@row.White.San</span>
+                                        @if (row.White.Classification.HasIcon())
+                                        {
+                                            <span class="move-badge">@row.White.Classification.ToIcon()</span>
+                                        }
                                     </button>
                                 }
                                 @if (row.Black is not null)
                                 {
-                                    <button class="move-btn @ChipClass(row.Black.PlyIndex + 1)"
-                                            style="border-bottom: 3px solid @row.Black.Classification.ToColorHex()"
+                                    <button class="move-btn @ChipClass(row.Black.PlyIndex + 1) @row.Black.Classification.ToCssClass()"
                                             @onclick="() => GoToMove(row.Black!.PlyIndex + 1)">
-                                        @row.Black.San
+                                        <span class="move-san">@row.Black.San</span>
+                                        @if (row.Black.Classification.HasIcon())
+                                        {
+                                            <span class="move-badge">@row.Black.Classification.ToIcon()</span>
+                                        }
                                     </button>
                                 }
                             </div>
@@ -556,17 +579,16 @@
         {
             var progress = new Progress<(int current, int total, string san)>(p =>
             {
-                _progressPercent = p.total == 0 ? 0 : (int)Math.Round(p.current * 100.0 / p.total);
-                _progress = p.current >= p.total
-                    ? $"Последний ход {p.current} из {p.total}: {p.san}"
-                    : $"Анализ хода {p.current} из {p.total}: {p.san}";
+                _progressPercent = p.total == 0
+                    ? 0
+                    : Math.Min(99, (int)Math.Round(p.current * 100.0 / p.total));
+                _progress = $"Анализ хода {p.current} из {p.total}: {p.san}";
                 _ = InvokeAsync(StateHasChanged);
             });
 
             _result = await Analyzer.AnalyzeAsync(_selected, _fastOptions, progress, ct);
 
             _progress = "Сохранение результата...";
-            _progressPercent = 100;
             await InvokeAsync(StateHasChanged);
 
             _board.LoadFromPgn(_selected.Pgn);
@@ -578,7 +600,6 @@
 
             _progress = "Анализ завершён — листайте ходы на доске";
             _progressPercent = 100;
-            _ = RefreshPositionBestAsync();
         }
         catch (OperationCanceledException)
         {
@@ -594,6 +615,9 @@
         {
             _analyzing = false;
         }
+
+        if (_result is not null)
+            _ = RefreshPositionBestAsync();
     }
 
     private GameOutcome GetOutcome(ChessComGameSummary game)
@@ -617,12 +641,34 @@
         return game.Result == "0-1" ? GameOutcome.Win : GameOutcome.Loss;
     }
 
-    private static string GetClassCss(MoveClassification c) => c switch
+    private IEnumerable<(MoveClassification Classification, int Count)> GetClassificationSummary()
     {
-        MoveClassification.Blunder or MoveClassification.Mistake => "classification-blunder",
-        MoveClassification.Inaccuracy => "classification-inaccuracy",
-        _ => "classification-best"
-    };
+        if (_result is null)
+            yield break;
+
+        var order = new[]
+        {
+            MoveClassification.Brilliant,
+            MoveClassification.Best,
+            MoveClassification.Excellent,
+            MoveClassification.Good,
+            MoveClassification.Book,
+            MoveClassification.Inaccuracy,
+            MoveClassification.Mistake,
+            MoveClassification.Miss,
+            MoveClassification.Blunder
+        };
+
+        var counts = _result.Moves
+            .GroupBy(m => m.Classification)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        foreach (var c in order)
+        {
+            if (counts.TryGetValue(c, out var count) && count > 0)
+                yield return (c, count);
+        }
+    }
 
     private async Task RefreshPositionBestAsync()
     {

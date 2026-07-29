@@ -25,10 +25,10 @@ public sealed class GameAnalyzer(IStockfishEngine engine)
             ct.ThrowIfCancellationRequested();
             var (san, uci, fenBefore, fenAfter, isWhite) = parsedMoves[i];
 
-            progress?.Report((i + 1, parsedMoves.Count, san));
-
             var evalBefore = await GetEvalAsync(fenBefore, cache, ct);
             var evalAfter = await GetEvalAsync(fenAfter, cache, ct);
+
+            progress?.Report((i + 1, parsedMoves.Count, san));
 
             var cpBefore = NormalizeCp(evalBefore, isWhite);
             var cpAfter = NormalizeCp(evalAfter, isWhite);
@@ -48,7 +48,7 @@ public sealed class GameAnalyzer(IStockfishEngine engine)
                 EvalBefore = evalBefore,
                 EvalAfter = evalAfter,
                 CentipawnLoss = cpLoss,
-                Classification = MoveClassifier.Classify(cpLoss, playedBest, i < 8),
+                Classification = MoveClassifier.Classify(cpLoss, playedBest, cpBefore, cpAfter, i < 8),
                 BestMoveSan = bestSan,
                 IsWhiteMove = isWhite
             });
@@ -100,7 +100,7 @@ public sealed class GameAnalyzer(IStockfishEngine engine)
             EvalBefore = evalBefore,
             EvalAfter = evalAfter,
             CentipawnLoss = cpLoss,
-            Classification = MoveClassifier.Classify(cpLoss, playedBest, plyIndex < 8),
+            Classification = MoveClassifier.Classify(cpLoss, playedBest, cpBefore, cpAfter, plyIndex < 8),
             BestMoveSan = bestSan,
             IsWhiteMove = isWhite
         };
