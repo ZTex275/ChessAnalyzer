@@ -21,7 +21,7 @@
                         LegalTargets="@_legalTargets"
                         PlayedUci="@CurrentPlayedUci"
                         BestUci="@CurrentBestUci"
-                        LastMoveClassification="@CurrentMoveAnalysis?.Classification"
+                        LastMoveClassification="@CurrentMoveClassification"
                         ShowLegend="@(CurrentMoveAnalysis is not null || !string.IsNullOrEmpty(CurrentBestUci))"
                         OnSquareClick="HandleSquareClick" />
 
@@ -233,13 +233,31 @@
 
     private bool BoardFlipped => UserIsBlackInSelectedGame;
 
-    private MoveAnalysis? CurrentMoveAnalysis =>
-        IsInVariation || _board.CurrentPly == 0
-            ? null
-            : GetAnalysisAt(_board.CurrentPly - 1);
+    private MoveAnalysis? CurrentMoveAnalysis
+    {
+        get
+        {
+            if (IsInVariation || _board.CurrentPly == 0)
+                return null;
 
-    private string? CurrentPlayedUci =>
-        CurrentMoveAnalysis?.Uci;
+            return GetAnalysisAt(_board.CurrentPly - 1);
+        }
+    }
+
+    private string? CurrentPlayedUci
+    {
+        get
+        {
+            if (_board.CurrentPly == 0)
+                return null;
+
+            return CurrentMoveAnalysis?.Uci
+                ?? _board.GetMoveAt(_board.CurrentPly - 1)?.Uci;
+        }
+    }
+
+    private MoveClassification? CurrentMoveClassification =>
+        CurrentMoveAnalysis?.Classification;
 
     private string? CurrentBestUci
     {
@@ -364,6 +382,7 @@
             _pgnMoveCount = _pgnUciMoves.Count;
             _moveAnalyses.Clear();
             ClearSelection();
+            _board.GoToPly(_board.MainMoveCount);
             _status = $"Партия загружена · {_board.MainMoveCount} ходов";
             _ = RefreshPositionBestAsync();
         }
@@ -421,7 +440,13 @@
 
     private MoveAnalysis? GetAnalysisAt(int moveIndex)
     {
-        if (moveIndex < 0 || moveIndex >= _moveAnalyses.Count)
+        if (moveIndex < 0)
+            return null;
+
+        if (_result is not null && moveIndex < _result.Moves.Count)
+            return _result.Moves[moveIndex];
+
+        if (moveIndex >= _moveAnalyses.Count)
             return null;
 
         return _moveAnalyses[moveIndex];
@@ -596,7 +621,7 @@
             _pgnMoveCount = _pgnUciMoves.Count;
             _moveAnalyses.Clear();
             _moveAnalyses.AddRange(_result.Moves.Cast<MoveAnalysis?>());
-            _board.GoToPly(0);
+            _board.GoToPly(_board.MainMoveCount);
 
             _progress = "Анализ завершён — листайте ходы на доске";
             _progressPercent = 100;
