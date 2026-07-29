@@ -259,7 +259,7 @@
     {
         get
         {
-            if (IsInVariation || _board.CurrentPly == 0)
+            if (_board.CurrentPly == 0)
                 return null;
 
             return GetAnalysisAt(_board.CurrentPly - 1);
@@ -282,7 +282,7 @@
         CurrentMoveAnalysis?.Classification;
 
     private string? CurrentHighlightBadgeSquare =>
-        _board.CurrentPly == 0 || IsInVariation
+        _board.CurrentPly == 0
             ? null
             : GetMoveDestinationSquare(_board.CurrentPly - 1);
 
@@ -290,8 +290,11 @@
     {
         get
         {
-            if (_board.CurrentPly == 0 || IsInVariation || _selected is null)
+            if (_board.CurrentPly == 0)
                 return EmptyBadges;
+
+            if (_result is not null && !IsInVariation && _board.CurrentPly <= _pgnMoveCount)
+                return BuildSingleMoveBadge(_board.CurrentPly - 1);
 
             var badges = new Dictionary<string, MoveClassification>();
             for (var i = 0; i < _board.CurrentPly; i++)
@@ -309,6 +312,19 @@
         }
     }
 
+    private IReadOnlyDictionary<string, MoveClassification> BuildSingleMoveBadge(int moveIndex)
+    {
+        var analysis = GetAnalysisAt(moveIndex);
+        if (analysis is null || !analysis.Classification.HasIcon())
+            return EmptyBadges;
+
+        var to = GetMoveDestinationSquare(moveIndex);
+        if (to is null)
+            return EmptyBadges;
+
+        return new Dictionary<string, MoveClassification> { [to] = analysis.Classification };
+    }
+
     private static readonly IReadOnlyDictionary<string, MoveClassification> EmptyBadges =
         new Dictionary<string, MoveClassification>();
 
@@ -318,11 +334,22 @@
         if (analysis?.Uci.Length >= 4)
             return analysis.Uci[2..4];
 
-        var move = GetMainLineMoveAt(moveIndex);
+        var move = GetMoveAtPly(moveIndex);
         if (move?.Uci.Length >= 4)
             return move.Value.Uci[2..4];
 
         return null;
+    }
+
+    private (string San, string Uci, bool IsWhite)? GetMoveAtPly(int moveIndex)
+    {
+        if (moveIndex < 0)
+            return null;
+
+        if (_selected is not null && !IsInVariation && moveIndex < _pgnMoves.Count)
+            return _pgnMoves[moveIndex];
+
+        return _board.GetMoveAt(moveIndex);
     }
 
     private string? CurrentBestUci
@@ -543,6 +570,7 @@
         _board.GoToPly(_board.BranchPly);
         ClearSelection();
         _ = RefreshPositionBestAsync();
+        _ = EnsureVisibleMoveAnalyzedAsync();
     }
 
     private string GetPlyLabel()
@@ -629,12 +657,7 @@
         ClearSelection();
 
         if (_board.TryMakeMove(move.From, move.To))
-        {
-            if (_board.IsOnMainLine)
-                _ = EnsureVisibleMoveAnalyzedAsync();
-            else
-                _ = RefreshPositionBestAsync();
-        }
+            _ = EnsureVisibleMoveAnalyzedAsync();
 
         return Task.CompletedTask;
     }
@@ -679,12 +702,7 @@
             ClearSelection();
 
             if (_board.TryMakeMove(from, square))
-            {
-                if (_board.IsOnMainLine)
-                    _ = EnsureVisibleMoveAnalyzedAsync();
-                else
-                    _ = RefreshPositionBestAsync();
-            }
+                _ = EnsureVisibleMoveAnalyzedAsync();
         }
         else if (_board.IsOwnPiece(square))
         {
@@ -707,7 +725,7 @@
 
     private async Task EnsureVisibleMoveAnalyzedAsync()
     {
-        if (_board.CurrentPly == 0 || !_board.IsOnMainLine || _analyzing)
+        if (_board.CurrentPly == 0 || _analyzing)
             return;
 
         var moveIndex = _board.CurrentPly - 1;
@@ -716,6 +734,7 @@
 
         var ct = _backgroundAnalysisCts?.Token ?? CancellationToken.None;
         await AnalyzeMoveAtInternalAsync(moveIndex, ct);
+        _ = RefreshPositionBestAsync();
         await InvokeAsync(StateHasChanged);
     }
 
@@ -801,7 +820,7 @@
         if (moveIndex < 0 || GetAnalysisAt(moveIndex) is not null)
             return;
 
-        var move = GetMainLineMoveAt(moveIndex);
+        var move = GetMoveAtPly(moveIndex);
         if (move is null)
             return;
 
