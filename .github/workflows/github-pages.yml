@@ -32,8 +32,6 @@ jobs:
           mkdir -p src/ChessAnalyzer.Web/wwwroot/js
           curl -fsSL "https://cdn.jsdelivr.net/npm/stockfish.js@10.0.0/stockfish.js" \
             -o src/ChessAnalyzer.Web/wwwroot/js/stockfish.js
-          curl -fsSL "https://cdn.jsdelivr.net/npm/stockfish.js@10.0.0/stockfish.wasm.js" \
-            -o src/ChessAnalyzer.Web/wwwroot/js/stockfish.wasm.js
 
       - name: Publish Blazor WebAssembly
         run: |

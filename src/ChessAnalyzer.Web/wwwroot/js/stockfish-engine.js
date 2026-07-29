@@ -3,25 +3,35 @@ let ready = false;
 let initPromise = null;
 
 function createWorker() {
-    const wasmSupported = typeof WebAssembly === 'object'
-        && WebAssembly.validate(Uint8Array.of(0x0, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00));
-    const script = wasmSupported ? 'stockfish.wasm.js' : 'stockfish.js';
-    return new Worker(new URL(script, import.meta.url));
+    // stockfish.wasm.js needs SharedArrayBuffer (COOP/COEP headers).
+    // GitHub Pages does not provide them, so use the single-threaded build.
+    return new Worker(new URL('stockfish.js', import.meta.url));
 }
 
-function waitReady() {
+function sendAndWaitFor(expectedPrefix, command, timeoutMs = 60000) {
     return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Stockfish timeout')), 30000);
+        const timeout = setTimeout(() => {
+            worker.removeEventListener('message', handler);
+            reject(new Error(`Stockfish timeout waiting for ${expectedPrefix}`));
+        }, timeoutMs);
+
         const handler = (event) => {
-            if (event.data === 'readyok') {
+            const line = typeof event.data === 'string' ? event.data.trim() : '';
+            if (!line) {
+                return;
+            }
+
+            if (line === expectedPrefix || line.startsWith(expectedPrefix)) {
                 clearTimeout(timeout);
                 worker.removeEventListener('message', handler);
-                ready = true;
-                resolve();
+                resolve(line);
             }
         };
+
         worker.addEventListener('message', handler);
-        worker.postMessage('isready');
+        if (command) {
+            worker.postMessage(command);
+        }
     });
 }
 
@@ -40,26 +50,41 @@ export async function initialize(options) {
         worker.onerror = (error) => {
             console.error('Stockfish worker error', error);
         };
-        worker.postMessage('uci');
-        await waitReady();
 
-        if (options?.hashMb) {
-            worker.postMessage(`setoption name Hash value ${options.hashMb}`);
-            await waitReady();
+        worker.postMessage('uci');
+        await sendAndWaitFor('uciok');
+        await sendAndWaitFor('readyok', 'isready');
+
+        const hashMb = Math.min(options?.hashMb ?? 16, 32);
+        if (hashMb > 0) {
+            worker.postMessage(`setoption name Hash value ${hashMb}`);
+            await sendAndWaitFor('readyok', 'isready');
         }
+
+        ready = true;
     })();
 
-    await initPromise;
+    try {
+        await initPromise;
+    } catch (error) {
+        initPromise = null;
+        if (worker) {
+            worker.terminate();
+            worker = null;
+        }
+        throw error;
+    }
 }
 
 export async function configure(options) {
-    if (!worker) {
+    if (!worker || !ready) {
         return;
     }
 
-    if (options?.hashMb) {
-        worker.postMessage(`setoption name Hash value ${options.hashMb}`);
-        await waitReady();
+    const hashMb = Math.min(options?.hashMb ?? 16, 32);
+    if (hashMb > 0) {
+        worker.postMessage(`setoption name Hash value ${hashMb}`);
+        await sendAndWaitFor('readyok', 'isready');
     }
 }
 
@@ -69,24 +94,27 @@ export async function analyze(fen, depth, multiPv) {
     }
 
     const evaluations = new Map();
-    const targetDepth = depth || 14;
+    const targetDepth = Math.min(depth || 12, 16);
     const lines = multiPv || 1;
+
+    worker.postMessage(`setoption name MultiPV value ${lines}`);
+    await sendAndWaitFor('readyok', 'isready');
 
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             worker.removeEventListener('message', handler);
             reject(new Error('Analysis timeout'));
-        }, 120000);
+        }, 180000);
 
         const handler = (event) => {
-            const line = event.data;
-            if (typeof line !== 'string') {
+            const line = typeof event.data === 'string' ? event.data.trim() : '';
+            if (!line) {
                 return;
             }
 
             if (line.startsWith('info ')) {
                 const parsed = parseInfo(line);
-                if (parsed && parsed.bestMove) {
+                if (parsed?.bestMove) {
                     evaluations.set(parsed.multipv, parsed);
                 }
                 return;
@@ -96,13 +124,14 @@ export async function analyze(fen, depth, multiPv) {
                 clearTimeout(timeout);
                 worker.removeEventListener('message', handler);
 
+                const fallbackMove = line.split(' ')[1] || 'e2e4';
                 const results = [];
                 for (let i = 1; i <= lines; i++) {
                     results.push(evaluations.get(i) ?? {
                         centipawns: 0,
                         mateIn: null,
-                        bestMove: line.split(' ')[1] || 'e2e4',
-                        pvLine: line.split(' ')[1] || 'e2e4',
+                        bestMove: fallbackMove,
+                        pvLine: fallbackMove,
                         depth: targetDepth
                     });
                 }
@@ -112,7 +141,6 @@ export async function analyze(fen, depth, multiPv) {
         };
 
         worker.addEventListener('message', handler);
-        worker.postMessage(`setoption name MultiPV value ${lines}`);
         worker.postMessage(`position fen ${fen}`);
         worker.postMessage(`go depth ${targetDepth}`);
     });

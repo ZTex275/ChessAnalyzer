@@ -13,8 +13,8 @@ public sealed class StockfishWasmEngine(IJSRuntime js) : IStockfishEngine
     {
         _options = options;
         _module ??= await js.InvokeAsync<IJSObjectReference>("import", "./js/stockfish-engine.js");
-        await _module.InvokeVoidAsync("initialize", new { hashMb = options.HashMb });
-        await _module.InvokeVoidAsync("configure", new { hashMb = options.HashMb });
+        await _module.InvokeVoidAsync("initialize", new { hashMb = Math.Min(options.HashMb, 16) });
+        await _module.InvokeVoidAsync("configure", new { hashMb = Math.Min(options.HashMb, 16) });
     }
 
     public async Task<EngineEvaluation> AnalyzePositionAsync(string fen, CancellationToken ct = default)
@@ -31,7 +31,7 @@ public sealed class StockfishWasmEngine(IJSRuntime js) : IStockfishEngine
         if (_module is null)
             throw new InvalidOperationException("Stockfish WASM is not initialized");
 
-        var depth = _options.FastMode ? Math.Min(_options.Depth, 14) : _options.Depth;
+        var depth = _options.FastMode ? Math.Min(_options.Depth, 12) : Math.Min(_options.Depth, 14);
         var raw = await _module.InvokeAsync<List<JsEngineEvaluation>>("analyze", fen, depth, multiPv);
 
         return raw.Select(x => new EngineEvaluation

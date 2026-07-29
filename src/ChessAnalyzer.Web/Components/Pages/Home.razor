@@ -129,7 +129,7 @@
         _progress = "Stockfish...";
         try
         {
-            var options = new AnalysisOptions { Depth = 14, FastMode = true, Threads = 4, HashMb = 128 };
+            var options = new AnalysisOptions { Depth = 12, FastMode = true, Threads = 1, HashMb = 16 };
             var progress = new Progress<(int current, int total, string san)>(p =>
                 _progress = $"Анализ {p.current}/{p.total}: {p.san}");
 
