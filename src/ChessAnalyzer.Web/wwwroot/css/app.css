@@ -226,10 +226,26 @@ button:disabled {
     padding: 10px 8px;
 }
 
+.board-nav-secondary {
+    margin-top: 4px;
+}
+
+.board-nav-secondary button {
+    flex: 1 1 0;
+}
+
 .btn-flip-board {
-    flex: 1 1 100%;
     background: #444;
     color: var(--text);
+}
+
+.btn-clear-board {
+    background: #5a3030;
+    color: var(--text);
+}
+
+.btn-clear-board:disabled {
+    opacity: 0.5;
 }
 
 .ply-indicator {

@@ -32,8 +32,14 @@
                 <button @onclick="StepBack" disabled="@(!_board.CanStepBack || _analyzing)">← Назад</button>
                 <span class="ply-indicator">@GetPlyLabel()</span>
                 <button @onclick="StepForward" disabled="@(!_board.CanStepForward || _analyzing)">Вперёд →</button>
+            </div>
+
+            <div class="board-nav board-nav-secondary">
                 <button class="btn-flip-board" @onclick="ToggleBoardFlip" title="Перевернуть доску">
                     @(BoardFlipped ? "С белых" : "С чёрных")
+                </button>
+                <button class="btn-clear-board" @onclick="ClearBoardAndAnalysis" disabled="@(_analyzing || _backgroundAnalyzing)">
+                    Очистить
                 </button>
             </div>
 
@@ -464,6 +470,45 @@
     private void ToggleBoardFlip()
     {
         _boardFlipped = !_boardFlipped;
+    }
+
+    private void ClearBoardAndAnalysis()
+    {
+        StopBackgroundAnalysis();
+        _gameAnalysisCts?.Cancel();
+        _analyzing = false;
+        _result = null;
+        _progress = "";
+        _progressPercent = 0;
+        ClearSelection();
+
+        if (_selected is not null)
+        {
+            try
+            {
+                _board.LoadFromPgn(_selected.Pgn);
+                _pgnMoves = _board.Moves.Take(_board.MainMoveCount).ToList();
+                _pgnUciMoves = _pgnMoves.Select(m => m.Uci).ToList();
+                _pgnMoveCount = _pgnUciMoves.Count;
+                _moveAnalyses.Clear();
+                _board.GoToPly(0);
+                _boardFlipped = UserIsBlackInSelectedGame;
+                _status = "Партия сброшена";
+            }
+            catch (Exception ex)
+            {
+                _status = ex.Message;
+                ResetBoard();
+            }
+        }
+        else
+        {
+            ResetBoard();
+            _status = "Доска очищена";
+        }
+
+        _lastPositionFen = "";
+        _ = RefreshPositionBestAsync();
     }
 
     private void StepBack()
