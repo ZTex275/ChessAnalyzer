@@ -12,6 +12,8 @@ public static class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
+        AppContext.SetSwitch("BlazorWebView.AppHostAddressAlways0000", true);
+
         var builder = MauiApp.CreateBuilder();
         builder
             .UseMauiApp<App>()

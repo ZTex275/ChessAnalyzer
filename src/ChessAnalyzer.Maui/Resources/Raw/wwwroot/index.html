@@ -13,12 +13,13 @@
             color: #f0f0f0;
             font-family: Segoe UI, sans-serif;
         }
-        #app { min-height: 100vh; padding: 16px; box-sizing: border-box; }
+        #app { min-height: 100vh; padding: 16px; box-sizing: border-box; color: #f0f0f0; }
         .boot-error { color: #ffb4b4; line-height: 1.5; }
+        .boot-loading { color: #26c281; font-size: 18px; }
     </style>
 </head>
 <body>
-    <div id="app">Загрузка...</div>
+    <div id="app"><p class="boot-loading">Загрузка Chess Analyzer...</p></div>
     <script src="scripts/blazor.webview.es2019.js" autostart="false"></script>
     <script>
         window.addEventListener('error', function (e) {
