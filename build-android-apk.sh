@@ -5,8 +5,14 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
-export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}"
-export ANDROID_HOME="${ANDROID_HOME:-/android-sdk}"
+if [ -z "${JAVA_HOME:-}" ]; then
+  if [ -d /usr/lib/jvm/java-17-openjdk-arm64 ]; then
+    export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
+  else
+    export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+  fi
+fi
+export ANDROID_HOME="${ANDROID_HOME:-/root/android-sdk}"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
 
@@ -38,9 +44,11 @@ fi
 /root/.dotnet/dotnet publish src/ChessAnalyzer.Maui/ChessAnalyzer.Maui.csproj \
   -f net9.0-android \
   -c Release \
+  -p:EnableWindowsTargeting=true \
   -p:TargetFrameworks=net9.0-android \
   -p:AndroidPackageFormat=apk \
   -p:AndroidSdkDirectory="$ANDROID_HOME" \
+  -p:JavaSdkDirectory="$JAVA_HOME" \
   -p:AndroidKeyStore=true \
   -p:AndroidSigningKeyStore="$ROOT/android/chessanalyzer.keystore" \
   -p:AndroidSigningKeyAlias=chessanalyzer \
