@@ -6,9 +6,13 @@
              x:Class="ChessAnalyzer.Maui.Views.MainPage"
              BackgroundColor="{StaticResource BgDark}">
 
-    <b:BlazorWebView HostPage="wwwroot/index.html">
-        <b:BlazorWebView.RootComponents>
-            <b:RootComponent Selector="#app" ComponentType="{x:Type shared:App}" />
-        </b:BlazorWebView.RootComponents>
-    </b:BlazorWebView>
+    <Grid>
+        <b:BlazorWebView HostPage="wwwroot/index.html"
+                         VerticalOptions="FillAndExpand"
+                         HorizontalOptions="FillAndExpand">
+            <b:BlazorWebView.RootComponents>
+                <b:RootComponent Selector="#app" ComponentType="{x:Type shared:App}" />
+            </b:BlazorWebView.RootComponents>
+        </b:BlazorWebView>
+    </Grid>
 </ContentPage>

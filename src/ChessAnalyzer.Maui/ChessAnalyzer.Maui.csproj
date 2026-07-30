@@ -10,8 +10,8 @@
     <Nullable>enable</Nullable>
     <ApplicationTitle>Chess Analyzer</ApplicationTitle>
     <ApplicationId>com.chessanalyzer.app</ApplicationId>
-    <ApplicationDisplayVersion>1.0.5</ApplicationDisplayVersion>
-    <ApplicationVersion>6</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0.6</ApplicationDisplayVersion>
+    <ApplicationVersion>7</ApplicationVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
     <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
@@ -44,6 +44,11 @@
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-android'">
     <MauiAsset Include="engines\stockfish" LogicalName="engines/stockfish" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-android'">
+    <TrimmerRootAssembly Include="ChessAnalyzer.Shared" />
+    <TrimmerRootAssembly Include="ChessAnalyzer.Maui" />
   </ItemGroup>
 
 </Project>

@@ -41,6 +41,8 @@ if [ ! -x src/ChessAnalyzer.Maui/engines/stockfish ]; then
   chmod +x src/ChessAnalyzer.Maui/engines/stockfish
 fi
 
+/root/.dotnet/dotnet restore src/ChessAnalyzer.Maui/ChessAnalyzer.Maui.csproj -p:EnableWindowsTargeting=true
+
 /root/.dotnet/dotnet publish src/ChessAnalyzer.Maui/ChessAnalyzer.Maui.csproj \
   -f net9.0-android \
   -c Release \

@@ -13,11 +13,24 @@
             color: #f0f0f0;
             font-family: Segoe UI, sans-serif;
         }
-        #app { min-height: 100vh; }
+        #app { min-height: 100vh; padding: 16px; box-sizing: border-box; }
+        .boot-error { color: #ffb4b4; line-height: 1.5; }
     </style>
 </head>
 <body>
     <div id="app">Загрузка...</div>
-    <script src="_framework/blazor.webview.js" autostart="false"></script>
+    <script src="scripts/blazor.webview.es2019.js" autostart="false"></script>
+    <script>
+        window.addEventListener('error', function (e) {
+            var app = document.getElementById('app');
+            if (!app) return;
+            app.innerHTML = '<p class="boot-error">Ошибка: ' + (e.message || 'не удалось загрузить интерфейс') + '</p>';
+        });
+        window.setTimeout(function () {
+            var app = document.getElementById('app');
+            if (!app || typeof Blazor !== 'undefined') return;
+            app.innerHTML = '<p class="boot-error">Не удалось запустить интерфейс. Обновите Android System WebView в Google Play и перезапустите приложение.</p>';
+        }, 8000);
+    </script>
 </body>
 </html>

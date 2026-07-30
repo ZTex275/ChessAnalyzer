@@ -28,11 +28,14 @@ public static class StockfishPathHelper
             return dest;
         }
 
-        using var input = FileSystem.OpenAppPackageFileAsync("engines/stockfish").GetAwaiter().GetResult();
-        using var output = File.Create(dest);
-        input.CopyTo(output);
-        EnsureExecutable(dest);
-        return dest;
+        return Task.Run(async () =>
+        {
+            await using var input = await FileSystem.OpenAppPackageFileAsync("engines/stockfish");
+            await using var output = File.Create(dest);
+            await input.CopyToAsync(output);
+            EnsureExecutable(dest);
+            return dest;
+        }).GetAwaiter().GetResult();
     }
 
     private static void EnsureExecutable(string path)
