@@ -34,21 +34,38 @@ public sealed class ProcessStockfishEngine : IStockfishEngine
             return;
         }
 
+        if (!File.Exists(_executablePath))
+            throw new FileNotFoundException($"Stockfish не найден: {_executablePath}", _executablePath);
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = _executablePath,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            // Do not redirect stderr without a reader — Stockfish NNUE/logs can fill the pipe and deadlock.
+            RedirectStandardError = false,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = Path.GetDirectoryName(_executablePath) ?? AppContext.BaseDirectory
+        };
+
         _process = new Process
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = _executablePath,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            },
+            StartInfo = startInfo,
             EnableRaisingEvents = true
         };
 
-        _process.Start();
+        try
+        {
+            if (!_process.Start())
+                throw new InvalidOperationException($"Не удалось запустить Stockfish: {_executablePath}");
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"Не удалось запустить Stockfish ({_executablePath}): {ex.Message}", ex);
+        }
+
         _input = _process.StandardInput;
 
         await SendCommandAsync("uci", ct);

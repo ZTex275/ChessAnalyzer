@@ -10,8 +10,8 @@
     <Nullable>enable</Nullable>
     <ApplicationTitle>Chess Analyzer</ApplicationTitle>
     <ApplicationId>com.chessanalyzer.app</ApplicationId>
-    <ApplicationDisplayVersion>1.0.7</ApplicationDisplayVersion>
-    <ApplicationVersion>8</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0.8</ApplicationDisplayVersion>
+    <ApplicationVersion>9</ApplicationVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
     <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
@@ -43,9 +43,23 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-android'">
-    <MauiAsset Include="engines\stockfish" LogicalName="engines/stockfish" />
+    <AndroidNativeLibrary Include="Platforms\Android\lib\arm64-v8a\libstockfish.so" />
     <TrimmerRootAssembly Include="ChessAnalyzer.Shared" RootMode="All" />
     <TrimmerRootAssembly Include="ChessAnalyzer.Maui" RootMode="All" />
   </ItemGroup>
+
+  <Target Name="PrepareAndroidStockfish"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(TargetFramework)' == 'net9.0-android'">
+    <PropertyGroup>
+      <_StockfishSrc>$(MSBuildProjectDirectory)\engines\stockfish</_StockfishSrc>
+      <_StockfishDstDir>$(MSBuildProjectDirectory)\Platforms\Android\lib\arm64-v8a</_StockfishDstDir>
+      <_StockfishDst>$(_StockfishDstDir)\libstockfish.so</_StockfishDst>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_StockfishSrc)')"
+           Text="Stockfish Android binary missing: engines\stockfish. Download stockfish-android-armv8 and place it there." />
+    <MakeDir Directories="$(_StockfishDstDir)" />
+    <Copy SourceFiles="$(_StockfishSrc)" DestinationFiles="$(_StockfishDst)" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

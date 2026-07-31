@@ -10,7 +10,7 @@ public static class StockfishPathHelper
             return _cachedPath;
 
         if (OperatingSystem.IsAndroid())
-            _cachedPath = EnsureAndroidStockfish();
+            _cachedPath = GetAndroidStockfishPath();
         else if (OperatingSystem.IsWindows())
             _cachedPath = Path.Combine(AppContext.BaseDirectory, "engines", "stockfish.exe");
         else
@@ -19,32 +19,18 @@ public static class StockfishPathHelper
         return _cachedPath;
     }
 
-    private static string EnsureAndroidStockfish()
-    {
-        var dest = Path.Combine(FileSystem.CacheDirectory, "stockfish");
-        if (File.Exists(dest))
-        {
-            EnsureExecutable(dest);
-            return dest;
-        }
-
-        return Task.Run(async () =>
-        {
-            await using var input = await FileSystem.OpenAppPackageFileAsync("engines/stockfish");
-            await using var output = File.Create(dest);
-            await input.CopyToAsync(output);
-            EnsureExecutable(dest);
-            return dest;
-        }).GetAwaiter().GetResult();
-    }
-
-    private static void EnsureExecutable(string path)
+    private static string GetAndroidStockfishPath()
     {
 #if ANDROID
-        var file = new Java.IO.File(path);
-        file.SetReadable(true, false);
-        file.SetExecutable(true, false);
-        file.SetWritable(true, false);
+        // Must run from nativeLibraryDir — Android Q+ blocks execute from cache/files (W^X).
+        var nativeDir = Android.App.Application.Context.ApplicationInfo?.NativeLibraryDir
+            ?? throw new InvalidOperationException("NativeLibraryDir недоступен");
+        var path = Path.Combine(nativeDir, "libstockfish.so");
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"Stockfish не найден в native libs: {path}", path);
+        return path;
+#else
+        throw new PlatformNotSupportedException();
 #endif
     }
 }

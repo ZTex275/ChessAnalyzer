@@ -27,7 +27,7 @@ public static class MauiProgram
 
         builder.Services.AddScoped(_ => new HttpClient());
         builder.Services.AddScoped<ChessComClient>();
-        builder.Services.AddScoped<IStockfishEngine>(_ => new ProcessStockfishEngine(StockfishPathHelper.GetPath()));
+        builder.Services.AddSingleton<IStockfishEngine>(_ => new ProcessStockfishEngine(StockfishPathHelper.GetPath()));
         builder.Services.AddScoped<GameAnalyzer>();
 
 #if DEBUG
