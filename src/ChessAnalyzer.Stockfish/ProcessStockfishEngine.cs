@@ -133,52 +133,85 @@ public sealed class ProcessStockfishEngine : IStockfishEngine
         string? bestMove = null;
         var output = _process!.StandardOutput;
 
-        while (!ct.IsCancellationRequested)
+        try
         {
-            var line = await output.ReadLineAsync(ct);
-            if (line is null)
-                break;
-
-            if (line.StartsWith("bestmove "))
+            while (!ct.IsCancellationRequested)
             {
-                var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length >= 2)
-                    bestMove = parts[1];
-                break;
+                var line = await output.ReadLineAsync(ct);
+                if (line is null)
+                    break;
+
+                if (line.StartsWith("bestmove "))
+                {
+                    var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length >= 2)
+                        bestMove = parts[1];
+                    break;
+                }
+
+                if (!line.Contains(" pv "))
+                    continue;
+
+                var match = InfoRegex.Match(line);
+                if (!match.Success)
+                    continue;
+
+                var depth = int.Parse(match.Groups["depth"].Value);
+                if (depth < targetDepth - 1)
+                    continue;
+
+                var multipv = 1;
+                var mpMatch = Regex.Match(line, @"multipv (\d+)");
+                if (mpMatch.Success)
+                    multipv = int.Parse(mpMatch.Groups[1].Value);
+
+                var scoreType = match.Groups["type"].Value;
+                var scoreVal = int.Parse(match.Groups["score"].Value);
+                var pv = match.Groups["pv"].Value;
+                var pvMoves = pv.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+                evaluations[multipv] = new EngineEvaluation
+                {
+                    Depth = depth,
+                    Centipawns = scoreType == "cp" ? scoreVal : 0,
+                    MateIn = scoreType == "mate" ? scoreVal.ToString() : null,
+                    BestMove = pvMoves[0],
+                    PvLine = pv
+                };
             }
-
-            if (!line.Contains(" pv "))
-                continue;
-
-            var match = InfoRegex.Match(line);
-            if (!match.Success)
-                continue;
-
-            var depth = int.Parse(match.Groups["depth"].Value);
-            if (depth < targetDepth - 1)
-                continue;
-
-            var multipv = 1;
-            var mpMatch = Regex.Match(line, @"multipv (\d+)");
-            if (mpMatch.Success)
-                multipv = int.Parse(mpMatch.Groups[1].Value);
-
-            var scoreType = match.Groups["type"].Value;
-            var scoreVal = int.Parse(match.Groups["score"].Value);
-            var pv = match.Groups["pv"].Value;
-            var pvMoves = pv.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-            evaluations[multipv] = new EngineEvaluation
-            {
-                Depth = depth,
-                Centipawns = scoreType == "cp" ? scoreVal : 0,
-                MateIn = scoreType == "mate" ? scoreVal.ToString() : null,
-                BestMove = pvMoves[0],
-                PvLine = pv
-            };
+        }
+        catch (OperationCanceledException)
+        {
+            await DrainAfterStopAsync();
+            throw;
         }
 
         return bestMove;
+    }
+
+    private async Task DrainAfterStopAsync()
+    {
+        if (_process is null || _input is null || _process.HasExited)
+            return;
+
+        try
+        {
+            await _input.WriteLineAsync("stop");
+            await _input.FlushAsync();
+
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            var output = _process.StandardOutput;
+            while (!timeout.IsCancellationRequested)
+            {
+                var line = await output.ReadLineAsync(timeout.Token);
+                if (line is null || line.StartsWith("bestmove ", StringComparison.Ordinal))
+                    break;
+            }
+        }
+        catch
+        {
+            // Engine may already have finished; next command will re-sync via isready if needed.
+        }
     }
 
     private async Task SendCommandAsync(string command, CancellationToken ct)

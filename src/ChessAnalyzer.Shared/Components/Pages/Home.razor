@@ -247,6 +247,9 @@
     private string? _positionBestUci;
     private string? _positionBestSan;
     private string _lastPositionFen = "";
+    /// <summary>Move the user is looking at — background analysis must prefer this.</summary>
+    private int _requestedVisibleMove = -1;
+    private int _ensureVisibleGeneration;
 
     private bool UserIsBlackInSelectedGame =>
         _selected is not null
@@ -717,12 +720,38 @@
         if (_board.CurrentPly == 0 || _analyzing)
             return;
 
-        var moveIndex = _board.CurrentPly - 1;
-        if (GetAnalysisAt(moveIndex) is not null)
+        var generation = ++_ensureVisibleGeneration;
+        _requestedVisibleMove = _board.CurrentPly - 1;
+
+        // Collapse rapid navigation (←/→ spam) to the latest ply only.
+        await Task.Yield();
+        if (generation != _ensureVisibleGeneration)
             return;
 
+        var moveIndex = _board.CurrentPly - 1;
+        if (moveIndex < 0)
+            return;
+
+        _requestedVisibleMove = moveIndex;
+        if (GetAnalysisAt(moveIndex) is not null)
+        {
+            _ = RefreshPositionBestAsync();
+            return;
+        }
+
         var ct = _backgroundAnalysisCts?.Token ?? CancellationToken.None;
-        await AnalyzeMoveAtInternalAsync(moveIndex, ct);
+        try
+        {
+            await AnalyzeMoveAtInternalAsync(moveIndex, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (generation != _ensureVisibleGeneration)
+            return;
+
         _ = RefreshPositionBestAsync();
         await InvokeAsync(StateHasChanged);
     }
@@ -734,6 +763,7 @@
         _backgroundAnalysisCts = null;
         _backgroundEvalCache = null;
         _backgroundAnalyzing = false;
+        _requestedVisibleMove = -1;
     }
 
     private async Task AnalyzeAllMovesBackgroundAsync()
@@ -746,27 +776,23 @@
         var ct = _backgroundAnalysisCts.Token;
         _backgroundEvalCache = new EvalCache();
         _backgroundAnalyzing = true;
+        _requestedVisibleMove = Math.Max(0, _board.CurrentPly - 1);
         _progress = "Разметка ходов...";
         _progressPercent = 0;
 
         try
         {
-            var analyzed = CountAnalyzedMoves();
-            var priorityPly = Math.Max(0, _board.CurrentPly);
-            var order = Enumerable.Range(0, _pgnMoveCount)
-                .OrderBy(i => i < priorityPly ? 0 : 1)
-                .ThenBy(i => i);
-
-            foreach (var i in order)
+            while (true)
             {
                 ct.ThrowIfCancellationRequested();
 
-                if (GetAnalysisAt(i) is not null)
-                    continue;
+                var next = TakeNextMoveToAnalyze();
+                if (next is null)
+                    break;
 
-                await AnalyzeMoveAtInternalAsync(i, ct);
+                await AnalyzeMoveAtInternalAsync(next.Value, ct);
 
-                analyzed++;
+                var analyzed = CountAnalyzedMoves();
                 _progressPercent = Math.Min(99, (int)Math.Round(analyzed * 100.0 / _pgnMoveCount));
                 _progress = $"Разметка ходов {analyzed}/{_pgnMoveCount}";
                 await InvokeAsync(StateHasChanged);
@@ -789,6 +815,48 @@
         {
             _backgroundAnalyzing = false;
             await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    /// <summary>
+    /// Prefer the move currently on the board, then nearby plies, then the rest.
+    /// Re-evaluated every iteration so navigation never waits behind early-game analysis.
+    /// </summary>
+    private int? TakeNextMoveToAnalyze()
+    {
+        if (_requestedVisibleMove >= 0
+            && _requestedVisibleMove < _pgnMoveCount
+            && GetAnalysisAt(_requestedVisibleMove) is null)
+        {
+            return _requestedVisibleMove;
+        }
+
+        var focus = Math.Clamp(_board.CurrentPly - 1, 0, Math.Max(0, _pgnMoveCount - 1));
+        foreach (var i in MovesByDistance(focus, _pgnMoveCount))
+        {
+            if (GetAnalysisAt(i) is null)
+                return i;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<int> MovesByDistance(int focus, int count)
+    {
+        if (count <= 0)
+            yield break;
+
+        focus = Math.Clamp(focus, 0, count - 1);
+        yield return focus;
+
+        for (var distance = 1; distance < count; distance++)
+        {
+            var right = focus + distance;
+            var left = focus - distance;
+            if (right < count)
+                yield return right;
+            if (left >= 0)
+                yield return left;
         }
     }
 
@@ -963,8 +1031,19 @@
 
     private async Task RefreshPositionBestAsync()
     {
-        if (_analyzing || _backgroundAnalyzing)
+        if (_analyzing)
             return;
+
+        // Main-line move analysis already provides best move / classification.
+        if (_board.CurrentPly > 0
+            && !IsInVariation
+            && GetAnalysisAt(_board.CurrentPly - 1) is not null)
+        {
+            _positionBestUci = null;
+            _positionBestSan = null;
+            _lastPositionFen = _board.CurrentFen;
+            return;
+        }
 
         var fen = _board.CurrentFen;
         if (fen == _lastPositionFen)
@@ -977,14 +1056,29 @@
 
         try
         {
-            var (eval, bestSan) = await Analyzer.AnalyzePositionAsync(fen, _fastOptions, ct);
-            if (ct.IsCancellationRequested)
+            // Skip if move markup currently holds the analysis lock — visible-move
+            // analysis will supply arrows/badges as soon as it finishes.
+            if (!await _analysisLock.WaitAsync(0, ct))
                 return;
 
-            _lastPositionFen = fen;
-            _positionBestUci = eval.BestMove;
-            _positionBestSan = bestSan;
-            await InvokeAsync(StateHasChanged);
+            try
+            {
+                if (ct.IsCancellationRequested || fen != _board.CurrentFen)
+                    return;
+
+                var (eval, bestSan) = await Analyzer.AnalyzePositionAsync(fen, _fastOptions, ct);
+                if (ct.IsCancellationRequested || fen != _board.CurrentFen)
+                    return;
+
+                _lastPositionFen = fen;
+                _positionBestUci = eval.BestMove;
+                _positionBestSan = bestSan;
+                await InvokeAsync(StateHasChanged);
+            }
+            finally
+            {
+                _analysisLock.Release();
+            }
         }
         catch (OperationCanceledException)
         {
