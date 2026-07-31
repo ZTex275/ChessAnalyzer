@@ -1,0 +1,125 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build-all",
+      "detail": "Сборка всех платформ: solution + MAUI Windows/Android + Web + Server",
+      "dependsOrder": "parallel",
+      "dependsOn": [
+        "build-solution",
+        "build-maui-windows",
+        "build-maui-android",
+        "build-web",
+        "build-server"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "build-solution",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/ChessAnalyzer.sln",
+        "-c",
+        "Debug",
+        "--nologo"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build-web",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/ChessAnalyzer.Web/ChessAnalyzer.Web.csproj",
+        "-c",
+        "Debug",
+        "--nologo"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build-server",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/ChessAnalyzer.Server/ChessAnalyzer.Server.csproj",
+        "-c",
+        "Debug",
+        "--nologo"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build-maui-windows",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/ChessAnalyzer.Maui/ChessAnalyzer.Maui.csproj",
+        "-f",
+        "net9.0-windows10.0.19041.0",
+        "-c",
+        "Debug",
+        "--nologo"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build-maui-android",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/ChessAnalyzer.Maui/ChessAnalyzer.Maui.csproj",
+        "-f",
+        "net9.0-android",
+        "-c",
+        "Debug",
+        "-p:EmbedAssembliesIntoApk=true",
+        "-p:AndroidUseSharedRuntime=false",
+        "--nologo"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "run-maui-windows",
+      "dependsOn": ["build-maui-windows"],
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/ChessAnalyzer.Maui/ChessAnalyzer.Maui.csproj",
+        "-f",
+        "net9.0-windows10.0.19041.0",
+        "-c",
+        "Debug",
+        "-t:Run",
+        "--nologo"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "android-install",
+      "detail": "Сборка Android APK и установка на USB-телефон",
+      "dependsOn": ["build-maui-android"],
+      "command": "powershell",
+      "type": "process",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/install-android.ps1"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

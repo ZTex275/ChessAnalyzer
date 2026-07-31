@@ -48,8 +48,22 @@
 
 ```bash
 dotnet restore
-dotnet build
+dotnet build ChessAnalyzer.sln
 ```
+
+### Cursor / VS Code — F5
+
+В Run and Debug выбери конфигурацию и нажми **F5**:
+
+| Конфигурация | Что делает |
+|--------------|------------|
+| **Build All Platforms** | Собирает solution + MAUI Windows/Android + Web + Server, затем стартует Server |
+| **All: Web + Server** | Полная сборка, потом Web и Server вместе |
+| **Web** / **Server** | Только выбранный проект |
+| **MAUI Windows** | Сборка и запуск Windows-приложения |
+| **Android → Phone** | Сборка APK и установка на USB-телефон |
+
+`Ctrl+Shift+B` — та же задача `build-all` (сборка всех платформ без запуска).
 
 ### MAUI Windows
 

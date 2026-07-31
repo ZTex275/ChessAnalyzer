@@ -1,0 +1,4 @@
+{
+  "dotnet.defaultSolution": "ChessAnalyzer.sln",
+  "dotnet.preferCSharpExtension": true
+}

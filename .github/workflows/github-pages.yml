@@ -41,6 +41,8 @@ jobs:
 
       - name: Prepare GitHub Pages artifacts
         run: |
+          # Project pages live under /ChessAnalyzer/
+          sed -i 's|<base href="/" />|<base href="/ChessAnalyzer/" />|' publish/wwwroot/index.html
           touch publish/wwwroot/.nojekyll
           cp publish/wwwroot/index.html publish/wwwroot/404.html
 

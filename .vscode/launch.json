@@ -1,0 +1,88 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Build All Platforms",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-all",
+      "program": "${workspaceFolder}/src/ChessAnalyzer.Server/bin/Debug/net9.0/ChessAnalyzer.Server.dll",
+      "cwd": "${workspaceFolder}/src/ChessAnalyzer.Server",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:52989"
+      },
+      "console": "internalConsole",
+      "internalConsoleOptions": "openOnSessionStart"
+    },
+    {
+      "name": "Server",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-server",
+      "program": "${workspaceFolder}/src/ChessAnalyzer.Server/bin/Debug/net9.0/ChessAnalyzer.Server.dll",
+      "cwd": "${workspaceFolder}/src/ChessAnalyzer.Server",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:52989;https://localhost:52988"
+      },
+      "launchBrowser": {
+        "enabled": true,
+        "args": "${auto-detect-url}",
+        "windows": {
+          "command": "cmd.exe",
+          "args": "/C start ${auto-detect-url}"
+        }
+      }
+    },
+    {
+      "name": "Web",
+      "type": "blazorwasm",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/src/ChessAnalyzer.Web",
+      "browser": "edge",
+      "url": "http://localhost:5173",
+      "preLaunchTask": "build-web"
+    },
+    {
+      "name": "MAUI Windows",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "& '${workspaceFolder}/src/ChessAnalyzer.Maui/bin/Debug/net9.0-windows10.0.19041.0/win10-x64/ChessAnalyzer.Maui.exe'"
+      ],
+      "cwd": "${workspaceFolder}/src/ChessAnalyzer.Maui/bin/Debug/net9.0-windows10.0.19041.0/win10-x64",
+      "console": "integratedTerminal",
+      "preLaunchTask": "build-maui-windows"
+    },
+    {
+      "name": "Android → Phone",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/install-android.ps1"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "build-maui-android"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "All: Web + Server",
+      "configurations": ["Server", "Web"],
+      "preLaunchTask": "build-all",
+      "stopAll": true
+    }
+  ]
+}
