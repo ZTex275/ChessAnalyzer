@@ -6,9 +6,17 @@ let suppressClick = false;
 const DRAG_THRESHOLD = 8;
 
 export function init(element, dotnet) {
+    if (boardEl === element && dotNetRef === dotnet) {
+        return;
+    }
+
     dispose();
     boardEl = element;
     dotNetRef = dotnet;
+    if (!boardEl) {
+        return;
+    }
+
     boardEl.addEventListener('pointerdown', onPointerDown);
     boardEl.addEventListener('click', onClickCapture, true);
     window.addEventListener('pointermove', onPointerMove);
@@ -48,6 +56,14 @@ function getSquareName(target) {
     return getSquareElement(target)?.dataset?.square ?? null;
 }
 
+function canDragFromResult(result) {
+    return !!(result && (result.canDrag ?? result.CanDrag));
+}
+
+function legalTargetsFromResult(result) {
+    return result?.legalTargets ?? result?.LegalTargets ?? [];
+}
+
 function onPointerDown(e) {
     if (!boardEl || boardEl.dataset.interactive !== 'true' || e.button !== 0) {
         return;
@@ -72,31 +88,69 @@ function onPointerDown(e) {
         dragging: false,
         startX: e.clientX,
         startY: e.clientY,
+        lastX: e.clientX,
+        lastY: e.clientY,
         ghost: null
     };
 
     if (pieceImg) {
+        e.preventDefault();
+        try {
+            squareEl.setPointerCapture(e.pointerId);
+        } catch {
+            // ignore
+        }
+    }
+
+    if (pieceImg && dotNetRef) {
         dotNetRef.invokeMethodAsync('HandleDragStartJs', square)
             .then((result) => {
                 if (!dragState || dragState.square !== square || dragState.pointerId !== e.pointerId) {
                     return;
                 }
 
-                if (!result?.canDrag) {
+                if (!canDragFromResult(result)) {
                     return;
                 }
 
                 dragState.canDrag = true;
-                dragState.legalTargets = new Set(result.legalTargets ?? []);
+                dragState.legalTargets = new Set(legalTargetsFromResult(result));
+
+                // .NET answered after the pointer already moved past the threshold.
+                if (dragState.moved && !dragState.dragging) {
+                    beginDrag(dragState.lastX, dragState.lastY);
+                }
             })
             .catch(() => cleanupDrag());
     }
+}
+
+function beginDrag(x, y) {
+    if (!dragState || dragState.dragging || !dragState.canDrag || !dragState.pieceImg || !boardEl) {
+        return;
+    }
+
+    dragState.dragging = true;
+
+    const img = dragState.pieceImg.cloneNode(true);
+    img.classList.add('piece-drag-ghost');
+    img.style.width = `${dragState.pieceImg.offsetWidth}px`;
+    img.style.height = `${dragState.pieceImg.offsetHeight}px`;
+    document.body.appendChild(img);
+    dragState.ghost = img;
+    positionGhost(x, y);
+
+    dragState.squareEl.classList.add('drag-source');
+    updateLegalHighlights();
 }
 
 function onPointerMove(e) {
     if (!dragState || e.pointerId !== dragState.pointerId) {
         return;
     }
+
+    dragState.lastX = e.clientX;
+    dragState.lastY = e.clientY;
 
     const dx = e.clientX - dragState.startX;
     const dy = e.clientY - dragState.startY;
@@ -108,24 +162,12 @@ function onPointerMove(e) {
 
         dragState.moved = true;
 
-        if (!dragState.canDrag || !dragState.pieceImg) {
-            return;
+        if (dragState.canDrag && dragState.pieceImg) {
+            e.preventDefault();
+            beginDrag(e.clientX, e.clientY);
         }
 
-        dragState.dragging = true;
-        e.preventDefault();
-
-        const img = dragState.pieceImg.cloneNode(true);
-        img.classList.add('piece-drag-ghost');
-        img.style.width = `${dragState.pieceImg.offsetWidth}px`;
-        img.style.height = `${dragState.pieceImg.offsetHeight}px`;
-        document.body.appendChild(img);
-        dragState.ghost = img;
-        positionGhost(e.clientX, e.clientY);
-
-        dragState.squareEl.classList.add('drag-source');
-        updateLegalHighlights();
-        boardEl.setPointerCapture(e.pointerId);
+        return;
     }
 
     if (!dragState.dragging || !dragState.ghost) {
@@ -159,17 +201,17 @@ function finishDrag(targetSquare) {
         return;
     }
 
-    const { square, dragging } = dragState;
+    const { square, dragging, pointerId, squareEl } = dragState;
 
     try {
-        boardEl?.releasePointerCapture?.(dragState.pointerId);
+        squareEl?.releasePointerCapture?.(pointerId);
     } catch {
         // ignore
     }
 
     cleanupDrag();
 
-    if (dragging && targetSquare) {
+    if (dragging && targetSquare && targetSquare !== square) {
         suppressClick = true;
         dotNetRef.invokeMethodAsync('HandleDropJs', square, targetSquare);
     }

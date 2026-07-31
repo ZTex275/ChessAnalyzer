@@ -1,9 +1,12 @@
 @using ChessAnalyzer.Shared.Components
 @using ChessAnalyzer.Core.Chess
 @using ChessAnalyzer.Core.Models
+@using Microsoft.AspNetCore.Components
 @using Microsoft.JSInterop
+@using System.Text.Json.Serialization
 @implements IAsyncDisposable
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 
 <div class="board-wrap">
     <div class="board-with-coords">
@@ -154,17 +157,60 @@
 
         if (Interactive)
         {
-            _module ??= await JS.InvokeAsync<IJSObjectReference>(
-                "import", "/_content/ChessAnalyzer.Shared/js/chess-board.js");
-            _dotNetRef ??= DotNetObjectReference.Create(this);
-            await _module.InvokeVoidAsync("init", _boardRef, _dotNetRef);
-            _dragInitialized = true;
+            try
+            {
+                _module ??= await ImportBoardModuleAsync();
+                _dotNetRef ??= DotNetObjectReference.Create(this);
+                await _module.InvokeVoidAsync("init", _boardRef, _dotNetRef);
+                _dragInitialized = true;
+            }
+            catch (JSException)
+            {
+                _dragInitialized = false;
+            }
         }
         else if (_dragInitialized && _module is not null)
         {
-            await _module.InvokeVoidAsync("dispose");
+            try
+            {
+                await _module.InvokeVoidAsync("dispose");
+            }
+            catch (JSException)
+            {
+            }
+
             _dragInitialized = false;
         }
+    }
+
+    /// <summary>
+    /// GitHub Pages serves under /ChessAnalyzer/; local DevServer serves from /.
+    /// Absolute "/_content/..." ignores &lt;base href&gt; and breaks project pages.
+    /// </summary>
+    private async Task<IJSObjectReference> ImportBoardModuleAsync()
+    {
+        const string relativePath = "_content/ChessAnalyzer.Shared/js/chess-board.js";
+        var candidates = new[]
+        {
+            new Uri(new Uri(Navigation.BaseUri), relativePath).ToString(),
+            "./" + relativePath,
+            "/" + relativePath
+        };
+
+        JSException? last = null;
+        foreach (var url in candidates.Distinct(StringComparer.Ordinal))
+        {
+            try
+            {
+                return await JS.InvokeAsync<IJSObjectReference>("import", url);
+            }
+            catch (JSException ex)
+            {
+                last = ex;
+            }
+        }
+
+        throw last ?? new JSException("Failed to import chess-board.js");
     }
 
     [JSInvokable]
@@ -205,7 +251,10 @@
 
     public sealed class DragStartInfo
     {
+        [JsonPropertyName("canDrag")]
         public bool CanDrag { get; init; }
+
+        [JsonPropertyName("legalTargets")]
         public string[] LegalTargets { get; init; } = [];
     }
 
