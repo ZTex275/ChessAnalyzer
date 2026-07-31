@@ -1,64 +1,91 @@
-Chess Analyzer — кроссплатформенный анализатор партий Chess.com
+# Chess Analyzer
 
-Структура решения
+Кроссплатформенный анализатор партий Chess.com со Stockfish.
 
-ChessAnalyzer.Core       — модели, Chess.com API, PGN, классификация ходов
-ChessAnalyzer.Stockfish  — UCI-обёртка над бинарником Stockfish
-ChessAnalyzer.Maui       — Android + Windows (.NET MAUI)
-ChessAnalyzer.Web        — Blazor WebAssembly (фронтенд)
-ChessAnalyzer.Server     — API для анализа на сервере (для Web)
+## Платформы
 
-Возможности
+| Платформа | Проект | Движок |
+|-----------|--------|--------|
+| Android / Windows | `ChessAnalyzer.Maui` | нативный Stockfish |
+| Браузер | `ChessAnalyzer.Web` (Blazor WASM) | Stockfish.js в браузере |
+| API (опционально) | `ChessAnalyzer.Server` | нативный Stockfish |
+
+Общий UI — `ChessAnalyzer.Shared` (Blazor). Логика — `ChessAnalyzer.Core`.
+
+## Возможности
 
 - Загрузка последних партий с Chess.com по username
-- Анализ каждого хода через Stockfish
-- Классификация ходов как на Chess.com: лучший, отличный, неточность, ошибка, зевок
-- Показ лучшего хода и потери в centipawns
-- Точность белых/чёрных (%)
-- Кеш оценок FEN для ускорения повторных позиций
+- Анализ ходов через Stockfish с классификацией (лучший, отличный, неточность, ошибка, зевок)
+- Лучший ход, стрелка на доске, потеря в centipawns, точность белых/чёрных
+- Интерактивная доска: клик и **перетаскивание** фигур, вариации от основной линии
+- Фоновая разметка партии с **приоритетом текущего хода** на доске
+- Кеш оценок FEN между ходами
+- Иконка приложения — зелёный конь на тёмном фоне
 
-Быстродействие
+## Требования
 
-- FastMode: depth 12–14 (настраивается)
-- Multi-thread Stockfish (Threads = CPU-1)
-- Hash 256 MB
-- Кеш EvalCache между ходами одной партии
+- [.NET 9 SDK](https://dotnet.microsoft.com/download)
+- workload `maui` (для Android/Windows): `dotnet workload install maui`
+- Android SDK (API 35+) и устройство/эмулятор с **ARM64**
+- Бинарники Stockfish (см. ниже)
 
-Требования
+## Stockfish
 
-- .NET 9 SDK
-- workload maui (для Android/Windows)
-- Stockfish binary:
-  - Windows: src/ChessAnalyzer.Maui/engines/stockfish.exe
-  - Android: engines/stockfish (ARM64)
-  - Linux/Server: stockfish в PATH
+Скачайте с https://stockfishchess.org/download/
 
-Сборка
+| Цель | Куда положить |
+|------|----------------|
+| Windows (MAUI) | `src/ChessAnalyzer.Maui/engines/stockfish.exe` |
+| Android (MAUI) | `src/ChessAnalyzer.Maui/engines/stockfish` (stockfish-android-armv8) |
+| Server / Linux | `stockfish` в `PATH` |
+| Web | CI кладёт `stockfish.js` в `wwwroot/js/` |
 
-  cd /root/ChessAnalyzer
-  dotnet restore
-  dotnet build
+На Android бинарник **нельзя** запускать из cache (W^X). При сборке он копируется в `Platforms/Android/lib/arm64-v8a/libstockfish.so` и стартует из `nativeLibraryDir`.
 
-MAUI Windows:
-  dotnet build src/ChessAnalyzer.Maui -f net9.0-windows10.0.19041.0
+Лицензия Stockfish: GPL v3 — учитывайте при публикации.
 
-MAUI Android:
-  dotnet build src/ChessAnalyzer.Maui -f net9.0-android
+## Сборка
 
-Web (нужен запущенный Server):
-  dotnet run --project src/ChessAnalyzer.Server
-  dotnet run --project src/ChessAnalyzer.Web
+```bash
+dotnet restore
+dotnet build
+```
 
-Настройка Web-клиента
+### MAUI Windows
 
-В WebAnalysisEngine запросы идут на api/analyze.
-Запустите ChessAnalyzer.Server на том же хосте или пропишите BaseAddress в Program.cs Web-проекта.
+```bash
+dotnet build src/ChessAnalyzer.Maui -f net9.0-windows10.0.19041.0
+```
 
-Альтернатива для Web без сервера: подключить stockfish.wasm через JS Interop.
+### MAUI Android (Debug APK на телефон)
 
-Stockfish
+```bash
+dotnet build src/ChessAnalyzer.Maui -f net9.0-android -c Debug \
+  -p:EmbedAssembliesIntoApk=true -p:AndroidUseSharedRuntime=false
 
-Скачайте официальный Stockfish с https://stockfishchess.org/download/
-Положите бинарник в папку engines/ MAUI-проекта.
+adb install -r src/ChessAnalyzer.Maui/bin/Debug/net9.0-android/com.chessanalyzer.app-Signed.apk
+```
 
-Лицензия Stockfish: GPL v3 — учитывайте при публикации приложения.
+Release / CI: `build-android-apk.sh` или workflow `.github/workflows/android-apk.yml`.
+
+### Web
+
+Движок в браузере — отдельный Server **не обязателен**:
+
+```bash
+dotnet run --project src/ChessAnalyzer.Web
+```
+
+Публикация на GitHub Pages: workflow `.github/workflows/github-pages.yml`  
+(база сайта: `/ChessAnalyzer/`).
+
+Опционально серверный анализ:
+
+```bash
+dotnet run --project src/ChessAnalyzer.Server
+```
+
+## Версии
+
+Текущая версия приложения задаётся в `ChessAnalyzer.Maui.csproj`  
+(`ApplicationDisplayVersion` / `ApplicationVersion`). Релизы помечаются тегами `vX.Y.Z`.
