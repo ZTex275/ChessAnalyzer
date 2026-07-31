@@ -4,9 +4,11 @@ namespace ChessAnalyzer.Maui;
 
 public partial class App : Application
 {
-    public App(MainPage mainPage)
+    public App()
     {
         InitializeComponent();
-        MainPage = mainPage;
     }
+
+    protected override Window CreateWindow(IActivationState? activationState)
+        => new Window(new MainPage());
 }

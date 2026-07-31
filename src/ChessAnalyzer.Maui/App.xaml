@@ -5,13 +5,13 @@
              x:Class="ChessAnalyzer.Maui.App">
     <Application.Resources>
         <ResourceDictionary>
-            <Style TargetType="b:BlazorWebView">
-                <Setter Property="BackgroundColor" Value="{StaticResource BgDark}" />
-            </Style>
             <Color x:Key="BgDark">#1E1E1E</Color>
             <Color x:Key="AccentGreen">#26C281</Color>
             <Color x:Key="AccentRed">#CA3431</Color>
             <Color x:Key="TextLight">#F0F0F0</Color>
+            <Style TargetType="b:BlazorWebView">
+                <Setter Property="BackgroundColor" Value="{StaticResource BgDark}" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
