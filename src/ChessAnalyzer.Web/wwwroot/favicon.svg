@@ -1,28 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Chess Analyzer">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#2A2A2A"/>
-      <stop offset="100%" stop-color="#141414"/>
-    </linearGradient>
-    <linearGradient id="knight" x1="0.15" y1="0" x2="0.85" y2="1">
-      <stop offset="0%" stop-color="#4AE8A8"/>
-      <stop offset="45%" stop-color="#26C281"/>
-      <stop offset="100%" stop-color="#178F5C"/>
-    </linearGradient>
-  </defs>
-  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
-  <rect x="16" y="16" width="48" height="48" rx="6" fill="#333" opacity="0.55"/>
-  <rect x="64" y="64" width="48" height="48" rx="6" fill="#333" opacity="0.55"/>
-  <g fill="url(#knight)" transform="translate(64 66) scale(0.92) translate(-64 -64)">
-    <path d="M30 108h68c2 0 4 2 4 4v2H26v-2c0-2 2-4 4-4z"/>
-    <path d="M36 108c1-10 5-17 13-22 7-5 12-10 15-17 3-7 4-15 2-23
-             7 2 14 6 18 12 4 5 6 12 5 18-1 7-4 12-9 16-5 5-12 8-19 8
-             -3 0-6-1-8-2l-4-7c0 6-3 11-8 15-6 5-12 8-18 9v-7z"/>
-    <path d="M54 24c10-12 28-16 42-8 8 5 14 13 15 22l-10-2c-1-6-5-11-11-14
-             -9-5-19-2-25 6l-11-4z"/>
-    <path d="M84 46c5 7 5 16-1 22l-8-5c4-4 5-9 3-14l6-3z"/>
-    <path d="M46 40c3-8 9-13 17-14l2 9c-5 1-9 5-10 10l-9-5z"/>
+  <rect width="128" height="128" rx="28" fill="#0B3D2E"/>
+  <g fill="#F2EDE3" transform="translate(64 66) scale(0.78) translate(-64 -64)">
+    <!-- Staunton knight silhouette -->
+    <path d="M28 104h72v8H28z"/>
+    <path d="M34 100c2-12 8-22 18-30 6-5 10-12 11-20 1-6-1-12-5-16
+             8 1 16 5 21 12 4 5 6 12 5 18-1 8-5 14-11 19-7 6-15 10-24 11
+             1 6 2 12 2 18H40c0-5-1-10-2-14-4 2-8 2-12 2v-6z"/>
+    <path d="M52 28c8-14 28-18 42-8 7 5 12 13 12 22l-10-2c0-6-4-12-10-15
+             -9-5-19-2-24 6-2-1-5-2-8-2l-2-1z"/>
+    <path d="M84 48c4 8 3 16-2 22l-8-4c4-4 5-10 3-15l7-3z"/>
+    <path d="M44 42c2-8 8-14 16-16l1 9c-5 2-9 6-10 11l-7-4z"/>
   </g>
-  <circle cx="76" cy="44" r="4.5" fill="#0F0F0F" transform="translate(64 66) scale(0.92) translate(-64 -64)"/>
-  <circle cx="77.4" cy="42.6" r="1.5" fill="#A8F5D0" opacity="0.9" transform="translate(64 66) scale(0.92) translate(-64 -64)"/>
+  <ellipse cx="74" cy="46" rx="3.2" ry="4" fill="#0B3D2E" transform="rotate(-18 74 46)"/>
 </svg>
